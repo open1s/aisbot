@@ -149,7 +149,7 @@ This file stores important information that should persist across sessions.
 
 def _make_provider(config):
     """Create BaseLLMProvider from config. Exits if no API key found."""
-    from aisbot.providers.provider import ProviderFactory
+    from aisbot.providers.factory import ProviderFactory
     p = config.get_provider()
     model = config.agents.defaults.model
     if not (p and p.api_key) and not model.startswith("bedrock/"):

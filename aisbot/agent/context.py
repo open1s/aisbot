@@ -25,31 +25,36 @@ class ContextBuilder:
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
     
-    def build_system_prompt(self, skill_names: list[str] | None = None) -> str:
+    def build_system_prompt(self, skill_names: list[str] | None = None, tools_summary: str | None = None) -> str:
         """
         Build the system prompt from bootstrap files, memory, and skills.
-        
+
         Args:
             skill_names: Optional list of skills to include.
-        
+            tools_summary: Optional summary of available tools.
+
         Returns:
             Complete system prompt.
         """
         parts = []
-        
+
         # Core identity
         parts.append(self._get_identity())
-        
+
         # Bootstrap files
         bootstrap = self._load_bootstrap_files()
         if bootstrap:
             parts.append(bootstrap)
-        
+
+        # Tools summary
+        if tools_summary:
+            parts.append(tools_summary)
+
         # Memory context
         memory = self.memory.get_memory_context()
         if memory:
             parts.append(f"# Memory\n\n{memory}")
-        
+
         # Skills - progressive loading
         # 1. Always-loaded skills: include full content
         always_skills = self.skills.get_always_skills()
@@ -57,7 +62,7 @@ class ContextBuilder:
             always_content = self.skills.load_skills_for_context(always_skills)
             if always_content:
                 parts.append(f"# Active Skills\n\n{always_content}")
-        
+
         # 2. Available skills: only show summary (agent uses read_file to load)
         skills_summary = self.skills.build_skills_summary()
         if skills_summary:
@@ -67,7 +72,7 @@ The following skills extend your capabilities. To use a skill, read its SKILL.md
 Skills with available="false" need dependencies installed first - you can try installing them with apt/brew.
 
 {skills_summary}""")
-        
+
         return "\n\n---\n\n".join(parts)
     
     def _get_identity(self) -> str:
@@ -117,7 +122,61 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
                 parts.append(f"## {filename}\n\n{content}")
         
         return "\n\n".join(parts) if parts else ""
-    
+
+    def build_tools_summary(self, tools_registry: Any) -> str:
+        """
+        Build a summary of available tools organized by source.
+
+        Args:
+            tools_registry: The ToolRegistry instance.
+
+        Returns:
+            Formatted summary of available tools.
+        """
+        from collections import defaultdict
+
+        # Group tools by source
+        tools_by_source = defaultdict(list)
+        for tool_name, tool in tools_registry._tools.items():
+            source = getattr(tool, "source", None) or "local"
+            description = getattr(tool, "description", "")
+            tools_by_source[source].append((tool_name, description))
+
+        parts = ["# Available Tools\n"]
+
+        # Local tools
+        if "local" in tools_by_source:
+            parts.append("## Local Tools\n")
+            for tool_name, description in tools_by_source["local"]:
+                parts.append(f"- **{tool_name}**: {description}")
+            parts.append("")
+
+        # MCP tools
+        if "mcp" in tools_by_source:
+            parts.append("## MCP Tools\n")
+            parts.append("Tools from MCP servers (Model Context Protocol):\n")
+            for tool_name, description in tools_by_source["mcp"]:
+                parts.append(f"- **{tool_name}**: {description}")
+            parts.append("")
+
+        # Skill tools
+        if "skill" in tools_by_source:
+            parts.append("## Skill Tools\n")
+            parts.append("Tools from skills directory:\n")
+            for tool_name, description in tools_by_source["skill"]:
+                parts.append(f"- **{tool_name}**: {description}")
+            parts.append("")
+
+        # Other sources
+        for source in sorted(tools_by_source.keys()):
+            if source not in ("local", "mcp", "skill"):
+                parts.append(f"## {source.title()} Tools\n")
+                for tool_name, description in tools_by_source[source]:
+                    parts.append(f"- **{tool_name}**: {description}")
+                parts.append("")
+
+        return "\n".join(parts)
+
     def build_messages(
         self,
         history: list[dict[str, Any]],
@@ -126,6 +185,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         media: list[str] | None = None,
         channel: str | None = None,
         chat_id: str | None = None,
+        tools_summary: str | None = None,
     ) -> list[dict[str, Any]]:
         """
         Build the complete message list for an LLM call.
@@ -137,6 +197,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
             media: Optional list of local file paths for images/media.
             channel: Current channel (telegram, feishu, etc.).
             chat_id: Current chat/user ID.
+            tools_summary: Optional summary of available tools.
 
         Returns:
             List of messages including system prompt.
@@ -144,7 +205,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         messages = []
 
         # System prompt
-        system_prompt = self.build_system_prompt(skill_names)
+        system_prompt = self.build_system_prompt(skill_names, tools_summary)
         if channel and chat_id:
             system_prompt += f"\n\n## Current Session\nChannel: {channel}\nChat ID: {chat_id}"
         messages.append({"role": "system", "content": system_prompt})

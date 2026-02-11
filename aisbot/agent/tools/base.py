@@ -7,11 +7,18 @@ from typing import Any
 class Tool(ABC):
     """
     Abstract base class for agent tools.
-    
+
     Tools are capabilities that the agent can use to interact with
     the environment, such as reading files, executing commands, etc.
+
+    The `source` field identifies where the tool comes from:
+    - None or "local": Built-in local tools
+    - "mcp": MCP server tools
+    - "skill": Tools from SKILLS directory
     """
-    
+
+    source: str | None = None  # Tool source: None (local), "mcp", "skill"
+
     _TYPE_MAP = {
         "string": str,
         "integer": int,

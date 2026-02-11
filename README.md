@@ -19,7 +19,7 @@ aisbot/
 ├── agent/          # Core agent logic
 │   ├── loop.py     # Agent loop (LLM ↔ tool execution)
 │   ├── context.py  # Context builder
-│   ├── mpcproxy.py # MCP proxy tool
+│   ├── mcpproxy.py # MCP proxy tool
 │   └── tools/      # Built-in tools
 ├── bus/            # Message routing (DBus + SQlite)
 │   ├── events.py   # Message types
@@ -150,30 +150,51 @@ Use any OpenAI-compatible endpoint:
 
 ## MCP (Model Context Protocol) Integration
 
-### MCP Tool Naming Convention
+aisbot integrates MCP via a single built-in tool: `mcp_proxy`.
 
+### MCP Config (`config.yaml`)
+
+The agent will try to load MCP servers from the first `config.yaml` it finds (in this order):
+
+1. `AISBOT_MCP_CONFIG` (explicit path)
+2. `<workspace>/config.yaml`
+3. `./config.yaml` (current working directory)
+4. `~/.aisbot/config.yaml`
+
+File format:
+
+```yaml
+mcp_servers:
+  local_math:
+    transport: stdio
+    description: Local demo MCP server
+    command: python
+    args:
+      - -m
+      - aisbot.mcp_server
+
+  weather:
+    transport: http
+    description: Remote MCP server over HTTP/SSE
+    url: http://localhost:3000/mcp
 ```
-mcp_<transport>_<server>_<tool>
 
-Transport types:
-- stdio:   mcp_stdio_<server>_<tool>     (Python module: python -m aisbot.mcp_<server>)
-- http:    mcp_http_<url>_<tool>          (HTTP/SSE endpoint)
-- command:  mcp_cmd_<command>_<tool>        (Custom shell/python script)
-```
+### Using `mcp_proxy`
 
-### MCP Tool Examples
+`mcp_proxy` supports:
 
-```python
-# Stdio (Python module)
-mcp_stdio_mymodule_calculator
+- `action: summary` to list available MCP servers/tools (best for giving the LLM context)
+- `action: call` to call a specific tool on a configured server
 
-# HTTP/SSE
-mcp_http_localhost_3000_weather
+Example call:
 
-# Custom command
-mcp_cmd_npx_mcp-server-cli_file_read
-mcp_cmd_bin_mcp_server_weather
-mcp_cmd_bash_scripts_server_sh_tool
+```json
+{
+  "action": "call",
+  "server": "local_math",
+  "tool_name": "add",
+  "arguments": { "a": 1, "b": 2 }
+}
 ```
 
 ### Running MCP Server
@@ -193,13 +214,6 @@ def add(a: int, b: int) -> int:
 
 if __name__ == "__main__":
     mcp.run()  # stdio mode
-```
-
-Register it with agent tools:
-
-```python
-# Agent will auto-discover tools from mcp_* modules
-# Tools will be named: mcp_stdio_math_add, mcp_stdio_math_mul
 ```
 
 ## CLI Commands
@@ -288,7 +302,7 @@ aisbot/
 │   │   ├── message.py      # Message sending
 │   │   ├── spawn.py       # Subagent spawning
 │   │   └── cron.py        # Scheduled tasks
-│   └── mpcproxy.py     # MCP proxy tool
+│   └── mcpproxy.py     # MCP proxy tool
 ├── bus/                # Message bus
 │   ├── events.py       # Message dataclasses
 │   ├── queue.py       # DBus queue

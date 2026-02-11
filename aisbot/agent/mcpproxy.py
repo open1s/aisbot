@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, List
 
 from aisbot.agent.tools.base import Tool
 
-from mcp.client.stdio import stdio_client
+from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.streamable_http import streamable_http_client
 from mcp.client.session import ClientSession
 
@@ -21,7 +21,9 @@ class MCPProxyTool(Tool):
     def __init__(self, config_file: str | Path = "config.yaml"):
         self.config_file = Path(config_file)
         self.servers: Dict[str, Dict[str, Any]] = {}
-        self._tool_info_cache: Dict[str, List[dict]] = {}  # server_name -> list of tool info dicts
+        self._tool_info_cache: Dict[
+            str, List[dict]
+        ] = {}  # server_name -> list of tool info dicts
         self._load_config()
 
     @property
@@ -96,26 +98,41 @@ class MCPProxyTool(Tool):
 
     async def _call_stdio(self, cfg: dict, tool_name: str, args: dict) -> str:
         try:
+            from mcp.types import TextContent
+
             command = cfg.get("command", "mcp_binary")
             cmd_args = cfg.get("args", [])
-            async with stdio_client({"command": command, "args": cmd_args}) as (reader, writer):
+            params = StdioServerParameters(command=command, args=cmd_args)
+            async with stdio_client(params) as (reader, writer):
                 async with ClientSession(reader, writer) as session:
                     await session.initialize()
                     result = await session.call_tool(tool_name, arguments=args)
-                    return result.output_text or "(no output)"
+                    if result.content and isinstance(result.content[0], TextContent):
+                        return result.content[0].text
+                    elif result.content:
+                        return str(result.content[0])
+                    return "(no output)"
         except Exception as e:
             return f"STDIO MCP error: {str(e)}"
 
     async def _call_http(self, cfg: dict, tool_name: str, args: dict) -> str:
         try:
+            from mcp.types import TextContent
+
             url = cfg["url"]
-            headers = cfg.get("auth", {})
-            timeout = cfg.get("timeout", 60.0)
-            async with streamable_http_client(url=url, headers=headers, timeout=timeout) as (reader, writer):
+            async with streamable_http_client(url=url) as (
+                reader,
+                writer,
+                _get_session_id,
+            ):
                 async with ClientSession(reader, writer) as session:
                     await session.initialize()
                     result = await session.call_tool(tool_name, arguments=args)
-                    return result.output_text or "(no output)"
+                    if result.content and isinstance(result.content[0], TextContent):
+                        return result.content[0].text
+                    elif result.content:
+                        return str(result.content[0])
+                    return "(no output)"
         except Exception as e:
             return f"HTTP MCP error: {str(e)}"
 
@@ -172,60 +189,46 @@ class MCPProxyTool(Tool):
             if transport == "stdio":
                 command = cfg.get("command", "mcp_binary")
                 cmd_args = cfg.get("args", [])
-                async with stdio_client({"command": command, "args": cmd_args}) as (reader, writer):
+                params = StdioServerParameters(command=command, args=cmd_args)
+                async with stdio_client(params) as (reader, writer):
                     async with ClientSession(reader, writer) as session:
                         await session.initialize()
-                        tools = await session.list_tools()
-                        for t in tools:
-                            tools_info.append({
-                                "name": t.name,
-                                "description": getattr(t, "description", ""),
-                                "parameters": getattr(t, "parameters", {}),
-                                "usage": getattr(t, "common_usage", None)
-                            })
+                        tools_result = await session.list_tools()
+                        for t in tools_result.tools:
+                            meta = getattr(t, "_meta", None) or {}
+                            usage = meta.get("usage") if meta else None
+                            tools_info.append(
+                                {
+                                    "name": t.name,
+                                    "description": t.description or "",
+                                    "parameters": t.inputSchema,
+                                    "usage": usage,
+                                }
+                            )
 
             elif transport == "http":
                 url = cfg["url"]
-                headers = cfg.get("auth", {})
-                timeout = cfg.get("timeout", 60.0)
-                async with streamable_http_client(url=url, headers=headers, timeout=timeout) as (reader, writer):
+                async with streamable_http_client(url=url) as (
+                    reader,
+                    writer,
+                    _get_session_id,
+                ):
                     async with ClientSession(reader, writer) as session:
                         await session.initialize()
-                        tools = await session.list_tools()
-                        for t in tools:
-                            tools_info.append({
-                                "name": t.name,
-                                "description": getattr(t, "description", ""),
-                                "parameters": getattr(t, "parameters", {}),
-                                "usage": getattr(t, "common_usage", None)
-                            })
+                        tools_result = await session.list_tools()
+                        for t in tools_result.tools:
+                            meta = getattr(t, "_meta", None) or {}
+                            usage = meta.get("usage") if meta else None
+                            tools_info.append(
+                                {
+                                    "name": t.name,
+                                    "description": t.description or "",
+                                    "parameters": t.inputSchema,
+                                    "usage": usage,
+                                }
+                            )
         except Exception:
             # Fail gracefully; LLM can still see other servers
             pass
 
         return tools_info
-
-async def main():
-    """Test MCP client connection and list tools."""
-    config = {
-        "command": "python",
-        "args": ["-m", "aisbot.mcp_server"]
-    }
-    tools_info = []
-    async with stdio_client(config) as (reader, writer):
-        async with ClientSession(reader, writer) as session:
-            await session.initialize()
-            tools = await session.list_tools()
-            for t in tools:
-                tools_info.append({
-                    "name": t.name,
-                    "description": getattr(t, "description", ""),
-                    "parameters": getattr(t, "parameters", {}),
-                    "usage": getattr(t, "common_usage", None)
-                })
-    print("Available tools:")
-    for tool in tools_info:
-        print(f"  - {tool['name']}: {tool['description']}")
-
-if __name__ == "__main__":
-    asyncio.run(main(), debug=True)
