@@ -77,7 +77,7 @@ class ProviderFactory(ABC):
         if provider_class is None:
             raise ValueError(f"No provider found for model: {model}")
 
-        provider = provider_class(api_key=self.api_key, api_base=self.api_base) 
+        provider = provider_class(api_key=self.api_key, api_base=self.api_base)
         provider.initialize() # Instantiate provider
 
         try:
@@ -94,7 +94,7 @@ class ProviderFactory(ABC):
         """Parse LiteLLM response into our standard format."""
         choice = response.choices[0]
         message = choice.message
-        
+
         tool_calls = []
         if hasattr(message, "tool_calls") and message.tool_calls:
             for tc in message.tool_calls:
@@ -106,13 +106,13 @@ class ProviderFactory(ABC):
                         args = json.loads(args)
                     except json.JSONDecodeError:
                         args = {"raw": args}
-                
+
                 tool_calls.append(ToolCallRequest(
                     id=tc.id,
                     name=tc.function.name,
                     arguments=args,
                 ))
-        
+
         usage = {}
         if hasattr(response, "usage") and response.usage:
             usage = {
@@ -120,7 +120,7 @@ class ProviderFactory(ABC):
                 "completion_tokens": response.usage.completion_tokens,
                 "total_tokens": response.usage.total_tokens,
             }
-        
+
         return LLMResponse(
             content=message.content,
             tool_calls=tool_calls,
