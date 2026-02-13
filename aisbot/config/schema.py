@@ -105,11 +105,24 @@ class ExecToolConfig(BaseModel):
     timeout: int = 60
 
 
+class CompressionConfig(BaseModel):
+    """Context compression configuration."""
+    enabled: bool = True
+    max_context_tokens: int = 16000  # Maximum tokens before compression
+    target_context_tokens: int = 12000  # Target tokens after compression
+    recent_messages_keep: int = 10  # Always keep this many recent messages
+    history_compression_threshold: int = 20  # Start compressing beyond this many messages
+    strategy: str = "semantic"  # "summary", "truncation", "semantic"
+    min_content_length: int = 200  # Minimum content length to compress
+    preserve_system_prompt_cache: bool = True  # Cache system prompt
+
+
 class ToolsConfig(BaseModel):
     """Tools configuration."""
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
+    compression: CompressionConfig = Field(default_factory=CompressionConfig)
 
 
 class Config(BaseSettings):

@@ -62,6 +62,7 @@ from aisbot.providers.base import BaseProvider
 ### Classes and Data Structures
 - Use `@dataclass` for simple data containers with `field(default_factory=list)`
 - Use abstract base classes for interfaces: `class BaseProvider(ABC)`
+- ContextBuilder accepts optional compressor parameter for context compression
 
 ```python
 @dataclass

@@ -12,6 +12,7 @@ from aisbot.bus.events import InboundMessage, OutboundMessage
 from aisbot.bus.squeue import MessageBus
 from aisbot.providers.base import BaseProvider
 from aisbot.agent.context import ContextBuilder
+from aisbot.agent.compression import ContextCompressor
 from aisbot.agent.tools.registry import ToolRegistry
 from aisbot.agent.tools.filesystem import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
 from aisbot.agent.tools.shell import ExecTool
@@ -58,8 +59,23 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
-        
-        self.context = ContextBuilder(workspace)
+
+        # Initialize compression from config if available
+        self.compressor = None
+        if provider:
+            try:
+                from aisbot.config.loader import load_config
+                config = load_config()
+                compression_config = config.tools.compression
+                self.compressor = ContextCompressor(provider, compression_config)
+                logger.info(f"Context compression enabled: {compression_config.strategy} strategy")
+            except Exception as e:
+                logger.warning(f"Failed to load compression config: {e}")
+                # Fallback to default config
+                compression_config = CompressionConfig()
+                self.compressor = ContextCompressor(provider, compression_config)
+
+        self.context = ContextBuilder(workspace, self.compressor)
         self.sessions = SessionManager(workspace)
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
@@ -417,14 +433,20 @@ class AgentLoop:
         
         # Build initial messages (use get_history for LLM-formatted messages)
         tools_summary = self.context.build_tools_summary(self.tools)
-        messages = self.context.build_messages(
+        messages, compression_stats = await self.context.build_messages(
             history=session.get_history(),
             current_message=msg.content,
             media=msg.media if msg.media else None,
             channel=msg.channel,
             chat_id=msg.chat_id,
             tools_summary=tools_summary,
+            provider=self.provider,
+            model=self.model
         )
+
+        # Log compression stats if available
+        if compression_stats and compression_stats.get("compressed"):
+            logger.info(f"Context compressed: {compression_stats}")
         
         # Agent loop
         iteration = 0
@@ -469,6 +491,10 @@ class AgentLoop:
                         result = await self._execute_mcp_tool(tool_call, tool)
                     else:
                         result = await self.tools.execute(tool_call.name, tool_call.arguments)
+
+                    # Compress long tool results
+                    if len(result) > 1000 and self.compressor:
+                        result = await self.context.compress_tool_result(result, self.provider)
 
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result

@@ -1,3 +1,14 @@
+# Tools configuration
+tools:
+  compression:
+    enabled: true  # Enable context compression by default
+    max_context_tokens: 16000  # Start compressing above this
+    target_context_tokens: 12000  # Target this many tokens after compression
+    recent_messages_keep: 10  # Always keep this many recent messages
+    strategy: "semantic"  # "truncation", "semantic", or "summary"
+    min_content_length: 200  # Minimum content length to compress
+    preserve_system_prompt_cache: true  # Cache system prompt
+
 # MCP servers configuration
 mcp_servers:
   # Local math MCP server (mcp_server.py) - stdio transport

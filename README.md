@@ -9,6 +9,7 @@ A lightweight AI assistant with multi-provider LLM support and MCP (Model Contex
 - **Message Bus Architecture**: Async message routing system for scalable multi-channel communication
 - **Tool Registry**: Extensible tool system with built-in filesystem, shell, web search, and MCP proxy tools
 - **Session Management**: Persistent conversation sessions with history tracking
+- **Context Compression**: Automatic token usage reduction (enabled by default)
 - **Cron Tasks**: Scheduled task execution for automation
 - **Multiple Channels**: Support for Telegram, Discord, WhatsApp, and Feishu
 

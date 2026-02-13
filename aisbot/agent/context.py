@@ -6,54 +6,71 @@ import platform
 from pathlib import Path
 from typing import Any
 
+from loguru import logger
+
 from aisbot.agent.memory import MemoryStore
 from aisbot.agent.skills import SkillsLoader
+from aisbot.agent.compression import ContextCompressor, CompressionConfig
 
 
 class ContextBuilder:
     """
     Builds the context (system prompt + messages) for the agent.
-    
+
     Assembles bootstrap files, memory, skills, and conversation history
     into a coherent prompt for the LLM.
     """
-    
+
     BOOTSTRAP_FILES = ["AGENTS.md", "SOUL.md", "USER.md", "TOOLS.md", "IDENTITY.md"]
-    
-    def __init__(self, workspace: Path):
+
+    def __init__(self, workspace: Path, compressor: ContextCompressor | None = None):
         self.workspace = workspace
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
+        self.compressor = compressor
     
-    def build_system_prompt(self, skill_names: list[str] | None = None, tools_summary: str | None = None) -> str:
+    async def build_system_prompt(
+        self,
+        skill_names: list[str] | None = None,
+        tools_summary: str | None = None,
+        provider: Any | None = None
+    ) -> str:
         """
         Build the system prompt from bootstrap files, memory, and skills.
 
         Args:
             skill_names: Optional list of skills to include.
             tools_summary: Optional summary of available tools.
+            provider: LLM provider for compression.
 
         Returns:
             Complete system prompt.
         """
         parts = []
+        content_sources = {}
 
         # Core identity
-        parts.append(self._get_identity())
+        identity = self._get_identity()
+        parts.append(identity)
+        content_sources["identity"] = identity
 
         # Bootstrap files
         bootstrap = self._load_bootstrap_files()
         if bootstrap:
             parts.append(bootstrap)
+            content_sources["bootstrap"] = bootstrap
 
         # Tools summary
         if tools_summary:
             parts.append(tools_summary)
+            content_sources["tools"] = tools_summary
 
         # Memory context
         memory = self.memory.get_memory_context()
         if memory:
-            parts.append(f"# Memory\n\n{memory}")
+            memory_section = f"# Memory\n\n{memory}"
+            parts.append(memory_section)
+            content_sources["memory"] = memory
 
         # Skills - progressive loading
         # 1. Always-loaded skills: include full content
@@ -61,19 +78,32 @@ class ContextBuilder:
         if always_skills:
             always_content = self.skills.load_skills_for_context(always_skills)
             if always_content:
-                parts.append(f"# Active Skills\n\n{always_content}")
+                skills_section = f"# Active Skills\n\n{always_content}"
+                parts.append(skills_section)
+                content_sources["always_skills"] = always_content
 
         # 2. Available skills: only show summary (agent uses read_file to load)
-        skills_summary = self.skills.build_skills_summary()
-        if skills_summary:
-            parts.append(f"""# Skills
+        skills_summary_section = self.skills.build_skills_summary()
+        if skills_summary_section:
+            available_skills_section = f"""# Skills
 
 The following skills extend your capabilities. To use a skill, read its SKILL.md file using the read_file tool.
 Skills with available="false" need dependencies installed first - you can try installing them with apt/brew.
 
-{skills_summary}""")
+{skills_summary_section}"""
+            parts.append(available_skills_section)
+            content_sources["skills_summary"] = skills_summary_section
 
-        return "\n\n---\n\n".join(parts)
+        system_prompt = "\n\n---\n\n".join(parts)
+
+        # Apply compression if configured
+        if self.compressor and provider:
+            system_prompt = await self.compressor.compress_system_prompt(
+                system_prompt,
+                content_sources
+            )
+
+        return system_prompt
     
     def _get_identity(self) -> str:
         """Get the core identity section."""
@@ -177,7 +207,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
 
         return "\n".join(parts)
 
-    def build_messages(
+    async def build_messages(
         self,
         history: list[dict[str, Any]],
         current_message: str,
@@ -186,7 +216,9 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         channel: str | None = None,
         chat_id: str | None = None,
         tools_summary: str | None = None,
-    ) -> list[dict[str, Any]]:
+        provider: Any | None = None,
+        model: str | None = None
+    ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         """
         Build the complete message list for an LLM call.
 
@@ -198,14 +230,16 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
             channel: Current channel (telegram, feishu, etc.).
             chat_id: Current chat/user ID.
             tools_summary: Optional summary of available tools.
+            provider: LLM provider for compression.
+            model: Model name for token limit checks.
 
         Returns:
-            List of messages including system prompt.
+            Tuple of (messages, compression_stats).
         """
         messages = []
 
         # System prompt
-        system_prompt = self.build_system_prompt(skill_names, tools_summary)
+        system_prompt = await self.build_system_prompt(skill_names, tools_summary, provider)
         if channel and chat_id:
             system_prompt += f"\n\n## Current Session\nChannel: {channel}\nChat ID: {chat_id}"
         messages.append({"role": "system", "content": system_prompt})
@@ -217,7 +251,12 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         user_content = self._build_user_content(current_message, media)
         messages.append({"role": "user", "content": user_content})
 
-        return messages
+        # Apply compression if configured
+        compression_stats = None
+        if self.compressor:
+            messages, compression_stats = await self.compressor.compress_messages(messages, model)
+
+        return messages, compression_stats
 
     def _build_user_content(self, text: str, media: list[str] | None) -> str | list[dict[str, Any]]:
         """Build user message content with optional base64-encoded images."""
@@ -237,6 +276,32 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
             return text
         return images + [{"type": "text", "text": text}]
     
+    async def compress_tool_result(self, result: str, provider: Any | None = None) -> str:
+        """
+        Compress tool result if it's too long.
+
+        Args:
+            result: Tool execution result.
+            provider: LLM provider for compression.
+
+        Returns:
+            Compressed result if needed.
+        """
+        if not self.compressor or not provider:
+            return result
+
+        # Only compress very long results
+        if len(result) < 1000:
+            return result
+
+        strategy = self.compressor.get_strategy(self.compressor.config.strategy)
+        if strategy:
+            compressed = await strategy.compress(result, target_ratio=0.4)
+            logger.debug(f"Tool result compressed: {len(result)} -> {len(compressed)} chars")
+            return compressed
+
+        return result
+
     def add_tool_result(
         self,
         messages: list[dict[str, Any]],
@@ -246,13 +311,13 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
     ) -> list[dict[str, Any]]:
         """
         Add a tool result to the message list.
-        
+
         Args:
             messages: Current message list.
             tool_call_id: ID of the tool call.
             tool_name: Name of the tool.
             result: Tool execution result.
-        
+
         Returns:
             Updated message list.
         """
