@@ -1,79 +1,81 @@
-# aisbot
+# 🤖 aisbot: Lightweight AI Assistant with MCP Integration
 
-A lightweight AI assistant with multi-provider LLM support and MCP (Model Context Protocol) integration.
+**aisbot** is a **lightweight** AI assistant with multi-provider LLM support and MCP (Model Context Protocol) integration. Inspired by [Nanobot](https://github.com/HKUDS/nanobot) ⚡️
 
-## Features
+## Key Features
 
-- **Multi-Provider LLM Support**: Flexible provider architecture supporting OpenAI, Anthropic, NVIDIA, and custom endpoints through LiteLLM
-- **MCP Integration**: Support for Model Context Protocol tools with both HTTP and stdio transports
-- **Message Bus Architecture**: Async message routing system for scalable multi-channel communication
-- **Tool Registry**: Extensible tool system with built-in filesystem, shell, web search, and MCP proxy tools
-- **Session Management**: Persistent conversation sessions with history tracking
-- **Context Compression**: Automatic token usage reduction (enabled by default)
-- **Cron Tasks**: Scheduled task execution for automation
-- **Multiple Channels**: Support for Telegram, Discord, WhatsApp, and Feishu
+🪶 **Lightweight**: Clean, readable codebase that's easy to understand, modify, and extend.
 
-## Architecture
+🔌 **MCP Integration**: Full support for Model Context Protocol tools with both HTTP and stdio transports.
+
+🤖 **Multi-Provider LLM**: Flexible provider architecture supporting OpenAI, Anthropic, NVIDIA, DeepSeek, and custom endpoints through LiteLLM.
+
+📱 **Multi-Channel**: Support for Telegram, Discord, WhatsApp, and Feishu.
+
+🛠️ **Extensible Tools**: Built-in filesystem, shell, web search, MCP proxy, and spawn tools.
+
+💾 **Context Compression**: Automatic token usage reduction for longer conversations.
+
+⏰ **Cron Tasks**: Scheduled task execution for automation.
+
+## 🏗️ Architecture
 
 ```
-aisbot/
-├── agent/          # Core agent logic
-│   ├── loop.py     # Agent loop (LLM ↔ tool execution)
-│   ├── context.py  # Context builder
-│   ├── mcpproxy.py # MCP proxy tool
-│   └── tools/      # Built-in tools
-├── bus/            # Message routing (DBus + SQlite)
-│   ├── events.py   # Message types
-│   ├── queue.py    # DBus message queue
-│   └── squeue.py  # SQLite queue
-├── channels/       # Chat app integrations
-├── cli/            # Command-line interface
-├── config/         # Configuration management
-├── cron/           # Scheduled tasks
-├── providers/      # LLM providers
-│   ├── base.py          # Abstract base provider
-│   ├── provider.py      # Provider factory
-│   └── liteprovider.py # LiteLLM implementation
-└── session/        # Conversation sessions
+┌─────────────────────────────────────────────────────────────┐
+│                     Chat Channels                           │
+│     Telegram │ Discord │ WhatsApp │ Feishu │ CLI           │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   Message Bus (DBus + SQLite)               │
+└─────────────────────────┬───────────────────────────────────┘
+                          │
+                          ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Agent Loop                              │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │   Context   │──│     LLM     │──│   Tool Execution    │  │
+│  │   Builder   │  │  Providers  │  │   (MCP + Built-in)  │  │
+│  └─────────────┘  └─────────────┘  └─────────────────────┘  │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+## 📦 Install
 
-### Installation
+**Install from source** (recommended for development):
 
 ```bash
-# Clone the repository
-git clone <repository-url>
+git clone https://github.com/yourusername/aisbot.git
 cd aisbot
-
-# Install with uv (recommended)
 uv sync
+```
 
-# Or install dependencies
+**Install with pip**:
+
+```bash
 pip install -e .
 ```
 
-### Configuration
+## 🚀 Quick Start
 
-Create `~/.aisbot/config.json`:
+> [!TIP]
+> Set your API key in `~/.aisbot/config.yaml`.
+> Get API keys: [OpenAI](https://platform.openai.com) · [Anthropic](https://console.anthropic.com) · [OpenRouter](https://openrouter.ai)
 
-```json
-{
-  "providers": {
-    "openai": {
-      "apiKey": "sk-...",
-      "apiBase": "https://api.openai.com/v1"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "gpt-4"
-    }
-  }
-}
+**1. Configure** (`~/.aisbot/config.yaml`)
+
+```yaml
+providers:
+  openai:
+    api_key: "sk-..."
+
+agents:
+  defaults:
+    model: gpt-4
 ```
 
-### Running the Agent
+**2. Chat**
 
 ```bash
 # Single message
@@ -81,88 +83,149 @@ uv run python -m aisbot agent -m "Hello, world!"
 
 # Interactive mode
 uv run python -m aisbot agent
+```
 
-# Start gateway
+That's it! You have a working AI assistant.
+
+## 🖥️ Local Models (vLLM)
+
+Run aisbot with your own local models using vLLM or any OpenAI-compatible server.
+
+**1. Start your vLLM server**
+
+```bash
+vllm serve meta-llama/Llama-3.1-8B-Instruct --port 8000
+```
+
+**2. Configure** (`~/.aisbot/config.yaml`)
+
+```yaml
+providers:
+  vllm:
+    api_key: "dummy"
+    api_base: "http://localhost:8000/v1"
+
+agents:
+  defaults:
+    model: "meta-llama/Llama-3.1-8B-Instruct"
+```
+
+## 💬 Chat Apps
+
+Talk to your aisbot through Telegram, Discord, WhatsApp, or Feishu — anytime, anywhere.
+
+| Channel | Setup |
+|---------|-------|
+| **Telegram** | Easy (just a token) |
+| **Discord** | Easy (bot token + intents) |
+| **WhatsApp** | Medium (scan QR) |
+| **Feishu** | Medium (app credentials) |
+
+### Telegram (Recommended)
+
+**1. Create a bot**
+- Open Telegram, search `@BotFather`
+- Send `/newbot`, follow prompts
+- Copy the token
+
+**2. Configure**
+
+```yaml
+channels:
+  telegram:
+    enabled: true
+    token: "YOUR_BOT_TOKEN"
+    allow_from:
+      - "YOUR_USER_ID"
+```
+
+**3. Run**
+
+```bash
 uv run python -m aisbot gateway
 ```
 
-## Provider System
+### Discord
 
-### Architecture
+**1. Create a bot**
+- Go to https://discord.com/developers/applications
+- Create an application → Bot → Add Bot
+- Copy the bot token
+- Enable **MESSAGE CONTENT INTENT**
 
-aisbot uses a flexible provider registration system:
+**2. Configure**
 
-1. **ProviderFactory**: Central factory that manages multiple LLM providers
-2. **BaseProvider**: Abstract base class defining the provider interface
-3. **Provider Registration**: Providers register themselves with a name and model matching logic
-
-### Registering a New Provider
-
-```python
-from aisbot.providers.base import BaseProvider
-from aisbot.providers.provider import ProviderFactory
-from litellm import completion
-
-class OpenAIProvider(BaseProvider):
-    name = "openai"
-
-    @classmethod
-    def match_model(cls, model: str) -> bool:
-        return model.startswith("gpt-")
-
-    def get_default_model(self) -> str:
-        return "gpt-4"
-
-    async def completions(self, **kwargs):
-        return completion(**kwargs)
-
-# Register the provider
-ProviderFactory.register_provider(OpenAIProvider)
+```yaml
+channels:
+  discord:
+    enabled: true
+    token: "YOUR_BOT_TOKEN"
+    allow_from:
+      - "YOUR_USER_ID"
 ```
 
-### Supported Providers
+**3. Run**
 
-| Provider | Model Pattern | Status |
-|----------|---------------|--------|
-| `litellm` | `nvidia/*`, `z-ai/*` | ✓ Built-in |
-| `openai` | `gpt-*`, `o1-*` | Example |
-| `anthropic` | `claude-*` | Example |
-| `custom` | `custom/*` | Example |
+```bash
+uv run python -m aisbot gateway
+```
 
-### Custom API Endpoints
+### WhatsApp
 
-Use any OpenAI-compatible endpoint:
+Requires **Node.js ≥18**.
+
+**1. Link device**
+
+```bash
+uv run python -m aisbot channels login
+# Scan QR with WhatsApp → Settings → Linked Devices
+```
+
+**2. Configure**
+
+```yaml
+channels:
+  whatsapp:
+    enabled: true
+    allow_from:
+      - "+1234567890"
+```
+
+### Feishu (飞书)
+
+Uses **WebSocket** long connection — no public IP required.
+
+**1. Create a Feishu bot**
+- Visit [Feishu Open Platform](https://open.feishu.cn/app)
+- Create a new app → Enable **Bot** capability
+- Get **App ID** and **App Secret**
+
+**2. Configure**
 
 ```json
 {
-  "providers": {
-    "vllm": {
-      "apiKey": "dummy",
-      "apiBase": "http://localhost:8000/v1"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "meta-llama/Llama-3.1-8B-Instruct"
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "appId": "cli_xxx",
+      "appSecret": "xxx",
+      "allowFrom": []
     }
   }
 }
 ```
 
-## MCP (Model Context Protocol) Integration
+## 🔌 MCP Integration
 
-aisbot integrates MCP via a single built-in tool: `mcp_proxy`.
+aisbot integrates MCP via a built-in `mcp_proxy` tool.
 
 ### MCP Config (`config.yaml`)
 
-The agent will try to load MCP servers from the first `config.yaml` it finds (in this order):
-
+The agent loads MCP servers from (in order):
 1. `AISBOT_MCP_CONFIG` (explicit path)
 2. `<workspace>/config.yaml`
 3. `./config.yaml` (current working directory)
 4. `~/.aisbot/config.yaml`
-
-File format:
 
 ```yaml
 mcp_servers:
@@ -182,13 +245,6 @@ mcp_servers:
 
 ### Using `mcp_proxy`
 
-`mcp_proxy` supports:
-
-- `action: summary` to list available MCP servers/tools (best for giving the LLM context)
-- `action: call` to call a specific tool on a configured server
-
-Example call:
-
 ```json
 {
   "action": "call",
@@ -198,128 +254,93 @@ Example call:
 }
 ```
 
-### Running MCP Server
+## ⚙️ Configuration
 
-Create a simple MCP server:
+Config file: `~/.aisbot/config.json`
 
-```python
-# aisbot/mcp_math.py
-from mcp.server.fastmcp import FastMCP
+### Providers
 
-mcp = FastMCP("math")
+| Provider | Purpose | Get API Key |
+|----------|---------|-------------|
+| `openai` | LLM (GPT) | [platform.openai.com](https://platform.openai.com) |
+| `anthropic` | LLM (Claude) | [console.anthropic.com](https://console.anthropic.com) |
+| `openrouter` | LLM (all models) | [openrouter.ai](https://openrouter.ai) |
+| `deepseek` | LLM (DeepSeek) | [platform.deepseek.com](https://platform.deepseek.com) |
+| `nvidia` | LLM (NVIDIA NIM) | [build.nvidia.com](https://build.nvidia.com) |
+| `vllm` | LLM (local) | — |
 
-@mcp.tool()
-def add(a: int, b: int) -> int:
-    """Add two integers"""
-    return a + b
-
-if __name__ == "__main__":
-    mcp.run()  # stdio mode
-```
-
-## CLI Commands
-
-| Command | Description |
-|----------|-------------|
-| `uv run python -m aisbot agent -m "..."` | Send single message |
-| `uv run python -m aisbot agent` | Interactive chat mode |
-| `uv run python -m aisbot gateway` | Start message gateway |
-| `uv run python -m aisbot status` | Show system status |
-
-## Built-in Tools
-
-- **File Tools**: `read_file`, `write_file`, `edit_file`, `list_dir`
-- **Shell Tool**: `exec` - Execute shell commands
-- **Web Tools**: `web_search`, `web_fetch`
-- **Message Tool**: `message` - Send messages via channels
-- **Spawn Tool**: `spawn` - Create background subagent tasks
-- **Cron Tool**: `cron` - Schedule tasks
-- **MCP Proxy Tool**: `mcp_proxy` - Call MCP server tools dynamically
-
-## Configuration
-
-### Config Location
-
-`~/.aisbot/config.json`
-
-### Provider Configuration
-
-```json
-{
-  "providers": {
-    "openai": {
-      "apiKey": "sk-...",
-      "apiBase": "https://api.openai.com/v1"
-    },
-    "anthropic": {
-      "apiKey": "sk-ant-..."
-    },
-    "nvidia": {
-      "apiKey": "nvapi-..."
-    }
-  }
-}
-```
-
-### Agent Configuration
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "model": "gpt-4",
-      "maxTokens": 4096,
-      "temperature": 0.7
-    },
-    "restrictToWorkspace": false,
-    "maxIterations": 20
-  }
-}
-```
-
-### Security Options
+### Security
 
 | Option | Default | Description |
-|---------|---------|-------------|
+|--------|---------|-------------|
 | `agents.restrictToWorkspace` | `false` | Restrict file tools to workspace directory |
 | `tools.restrictToWorkspace` | `false` | Restrict exec tool to workspace |
-| `channels.*.allowFrom` | `[]` | Allow list of user IDs (empty = all) |
+| `channels.*.allowFrom` | `[]` | Whitelist of user IDs (empty = all) |
 
-## Development
+## 📋 CLI Reference
 
-### Project Structure
+| Command | Description |
+|---------|-------------|
+| `python -m aisbot agent -m "..."` | Send single message |
+| `python -m aisbot agent` | Interactive chat mode |
+| `python -m aisbot gateway` | Start message gateway |
+| `python -m aisbot status` | Show system status |
+| `python -m aisbot channels login` | Link WhatsApp |
+
+Interactive mode exits: `exit`, `quit`, `/exit`, `/quit`, `:q`, or `Ctrl+D`.
+
+## 🛠️ Built-in Tools
+
+| Tool | Description |
+|------|-------------|
+| `read_file` | Read file contents |
+| `write_file` | Write file contents |
+| `edit_file` | Edit file with diff |
+| `list_dir` | List directory contents |
+| `exec` | Execute shell commands |
+| `web_search` | Search the web |
+| `web_fetch` | Fetch web content |
+| `message` | Send messages via channels |
+| `spawn` | Create background subagent tasks |
+| `cron` | Schedule tasks |
+| `mcp_proxy` | Call MCP server tools |
+
+## 🐳 Docker
+
+```bash
+# Build the image
+docker build -t aisbot .
+
+# Run agent
+docker run -v ~/.aisbot:/root/.aisbot --rm aisbot agent -m "Hello!"
+
+# Run gateway
+docker run -v ~/.aisbot:/root/.aisbot -p 18790:18790 aisbot gateway
+```
+
+## 📁 Project Structure
 
 ```
 aisbot/
 ├── agent/              # Core agent logic
-│   ├── loop.py         # Main agent loop
+│   ├── loop.py         # Agent loop (LLM ↔ tool execution)
 │   ├── context.py      # Context builder
-│   ├── tools/         # Tool implementations
-│   │   ├── base.py         # Tool base class
-│   │   ├── registry.py     # Tool registry
-│   │   ├── filesystem.py   # File operations
-│   │   ├── shell.py        # Shell execution
-│   │   ├── web.py          # Web search/fetch
-│   │   ├── message.py      # Message sending
-│   │   ├── spawn.py       # Subagent spawning
-│   │   └── cron.py        # Scheduled tasks
-│   └── mcpproxy.py     # MCP proxy tool
-├── bus/                # Message bus
-│   ├── events.py       # Message dataclasses
-│   ├── queue.py       # DBus queue
-│   └── squeue.py      # SQLite queue
+│   ├── compression.py  # Context compression
+│   ├── subagent.py     # Background task execution
+│   ├── mcpproxy.py     # MCP proxy tool
+│   └── tools/          # Built-in tools
+├── bus/                # Message routing (DBus + SQLite)
 ├── channels/           # Chat app integrations
-├── cli/               # CLI commands
-├── config/            # Configuration
-├── cron/              # Cron service
+├── cli/                # Command-line interface
+├── config/             # Configuration management
+├── cron/               # Scheduled tasks
 ├── heartbeat/          # Heartbeat service
 ├── providers/          # LLM providers
-│   ├── base.py            # Abstract provider
-│   ├── provider.py        # Provider factory
-│   └── liteprovider.py    # LiteLLM provider
-├── session/           # Session management
-└── skills/            # External skills
+├── session/            # Conversation sessions
+└── skills/             # External skills
 ```
+
+## 🔧 Development
 
 ### Testing
 
@@ -329,36 +350,18 @@ uv run pytest
 
 # Run with coverage
 uv run pytest --cov=aisbot
-
-# Run specific test
-uv run pytest tests/test_squeue_consume_outbound.py
 ```
 
 ### Linting
 
 ```bash
-# Check for errors
 ruff check aisbot
-
-# Format code
 ruff format aisbot
 ```
 
-## Dependencies
+## 🤝 Contributing
 
-- **Python**: >=3.12
-- **LiteLLM**: Multi-provider LLM support
-- **MCP**: Model Context Protocol client
-- **Pydantic**: Data validation
-- **Loguru**: Logging
-- **Typer**: CLI framework
-- **Rich**: Terminal formatting
-
-## License
-
-MIT License - see LICENSE file for details.
-
-## Contributing
+PRs welcome! The codebase is intentionally clean and readable.
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -366,7 +369,7 @@ MIT License - see LICENSE file for details.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## Roadmap
+## 🗺️ Roadmap
 
 - [ ] Multi-modal support (images, voice, video)
 - [ ] Long-term memory with vector database
@@ -375,3 +378,17 @@ MIT License - see LICENSE file for details.
 - [ ] Self-improvement from feedback
 - [ ] Streaming responses
 - [ ] Tool result caching
+
+## 🙏 Acknowledgments
+
+This project is inspired by [Nanobot](https://github.com/HKUDS/nanobot) - an ultra-lightweight personal AI assistant (~4,000 lines of core code) with multi-channel support and MCP integration.
+
+Key concepts adapted:
+- Ultra-lightweight agent architecture
+- Multi-provider LLM abstraction
+- Message bus and session management
+- Skill system format and metadata structure
+
+## 📄 License
+
+MIT License - see LICENSE file for details.
