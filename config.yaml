@@ -1,11 +1,17 @@
-
 # MCP servers configuration
 mcp_servers:
-  # Local math MCP server (mcp_server.py)
-  math:
-    description: "Math operations MCP server"
+  # Local math MCP server (mcp_server.py) - stdio transport
+  math_stdio:
+    description: "Math operations MCP server (stdio)"
     transport: "stdio"
     command: "python"
     args:
       - "-m"
       - "aisbot.mcp_server"
+
+  # HTTP-based math MCP server (mcp_http_server.py) - streamable-http transport
+  # Start the server with: python -m aisbot.mcp_http_server
+  math:
+    description: "Math operations via HTTP server"
+    transport: "http"
+    url: "http://127.0.0.1:8000/mcp"

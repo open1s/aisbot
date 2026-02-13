@@ -208,25 +208,32 @@ class MCPProxyTool(Tool):
 
             elif transport == "http":
                 url = cfg["url"]
-                async with streamable_http_client(url=url) as (
-                    reader,
-                    writer,
-                    _get_session_id,
-                ):
-                    async with ClientSession(reader, writer) as session:
-                        await session.initialize()
-                        tools_result = await session.list_tools()
-                        for t in tools_result.tools:
-                            meta = getattr(t, "_meta", None) or {}
-                            usage = meta.get("usage") if meta else None
-                            tools_info.append(
-                                {
-                                    "name": t.name,
-                                    "description": t.description or "",
-                                    "parameters": t.inputSchema,
-                                    "usage": usage,
-                                }
-                            )
+                logger.info(f"Connecting to HTTP MCP server at {url}")
+                try:
+                    async with streamable_http_client(url=url) as (
+                        reader,
+                        writer,
+                        _get_session_id,
+                    ):
+                        async with ClientSession(reader, writer) as session:
+                            await session.initialize()
+                            tools_result = await session.list_tools()
+                            for t in tools_result.tools:
+                                meta = getattr(t, "_meta", None) or {}
+                                usage = meta.get("usage") if meta else None
+                                tools_info.append(
+                                    {
+                                        "name": t.name,
+                                        "description": t.description or "",
+                                        "parameters": t.inputSchema,
+                                        "usage": usage,
+                                    }
+                                )
+                except Exception as e:
+                    logger.error(f"HTTP MCP connection error: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
+                    raise
         except Exception:
             # Fail gracefully; LLM can still see other servers
             pass
