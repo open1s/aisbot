@@ -214,10 +214,10 @@ class CompressionConfig:
     """Configuration for context compression."""
 
     enabled: bool = True
-    max_context_tokens: int = 1600  # Maximum tokens before compression
-    target_context_tokens: int = 1200  # Target tokens after compression
+    max_context_tokens: int = 16000  # Maximum tokens before compression
+    target_context_tokens: int = 12000  # Target tokens after compression
     recent_messages_keep: int = 10  # Always keep this many recent messages
-    history_compression_threshold: int = 2  # Start compressing beyond this many messages
+    history_compression_threshold: int = 20  # Start compressing beyond this many messages
     strategy: str = "semantic"  # "summary", "truncation", "semantic"
     min_content_length: int = 200  # Minimum content length to compress
     preserve_system_prompt_cache: bool = True  # Cache system prompt
