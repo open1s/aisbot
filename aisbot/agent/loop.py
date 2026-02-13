@@ -305,10 +305,10 @@ class AgentLoop:
 
                 # Use the original tool name from MCP server
                 # Add prefix if tool name conflicts with local tools
-                full_tool_name = tool_name
-                if self.tools.has(tool_name):
+                full_tool_name = f"{server_name}_{tool_name}"
+                if self.tools.has(full_tool_name):
                     # Add server prefix to avoid conflicts
-                    full_tool_name = f"{server_name}_{tool_name}"
+                    logger.warning(f"Tool name conflict: {full_tool_name}")
 
                 # Register as a wrapper tool
                 self.tools.register(_MCPToolWrapper(
