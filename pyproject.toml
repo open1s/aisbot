@@ -21,6 +21,7 @@ dependencies = [
     "langchain-nvidia-ai-endpoints>=1.0.3",
     "gh>=0.0.4",
     "mcp>=1.26.0",
+    "pyyaml>=6.0.0",
 ]
 
 [project.optional-dependencies]

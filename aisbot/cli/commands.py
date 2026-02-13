@@ -67,10 +67,10 @@ def onboard():
     
     console.print(f"\n{__logo__} aisbot is ready!")
     console.print("\nNext steps:")
-    console.print("  1. Add your API key to [cyan]~/.aisbot/config.json[/cyan]")
+    console.print("  1. Add your API key to [cyan]~/.aisbot/config.yaml[/cyan]")
     console.print("     Get one at: https://openrouter.ai/keys")
     console.print("  2. Chat: [cyan]aisbot agent -m \"Hello!\"[/cyan]")
-    console.print("\n[dim]Want Telegram/WhatsApp? See: https://github.com/HKUDS/aisbot#-chat-apps[/dim]")
+    console.print("\n[dim]for help, See: https://github.com/open1s/aisbot[/dim]")
 
 
 
