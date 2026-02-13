@@ -75,6 +75,10 @@ class AgentLoop:
         self._running = False
         self._register_default_tools_sync()
 
+    async def initialize(self) -> None:
+        """Initialize the agent loop. Register MCP tools for LLM access."""
+        await self._register_mcp_tools_async()
+
     def _register_default_tools_sync(self) -> None:
         """Register the default set of tools (synchronous part)."""
         # File tools (restrict to workspace if configured)
@@ -143,6 +147,16 @@ class AgentLoop:
         from aisbot.agent.mcpproxy import MCPProxyTool
 
         if not isinstance(mcp_proxy, MCPProxyTool):
+            return
+
+        # Check if MCP tools are already registered to avoid redundant work
+        # Look for any tool with "mcp" source field
+        mcp_tools_already_registered = any(
+            getattr(tool, "source", None) == "mcp"
+            for tool in self.tools._tools.values()
+        )
+        if mcp_tools_already_registered:
+            logger.debug("MCP tools already registered, skipping re-registration")
             return
 
         await self._register_mcp_tools(mcp_proxy)
@@ -307,8 +321,9 @@ class AgentLoop:
                 # Add prefix if tool name conflicts with local tools
                 full_tool_name = f"{server_name}_{tool_name}"
                 if self.tools.has(full_tool_name):
-                    # Add server prefix to avoid conflicts
-                    logger.warning(f"Tool name conflict: {full_tool_name}")
+                    # Tool already registered, skip to avoid conflicts
+                    logger.debug(f"MCP tool already registered: {full_tool_name} (from {server_name})")
+                    continue
 
                 # Register as a wrapper tool
                 self.tools.register(_MCPToolWrapper(
@@ -327,8 +342,15 @@ class AgentLoop:
         self._running = True
         logger.info("Agent loop started")
 
-        # Register individual MCP tools for direct LLM access
-        await self._register_mcp_tools_async()
+        # Register MCP tools if not already initialized
+        # For optimal performance, call initialize() before run()
+        mcp_tools_already_registered = any(
+            getattr(tool, "source", None) == "mcp"
+            for tool in self.tools._tools.values()
+        )
+        if not mcp_tools_already_registered:
+            logger.debug("MCP tools not initialized, registering now")
+            await self._register_mcp_tools_async()
 
         while self._running:
             try:
@@ -591,6 +613,9 @@ class AgentLoop:
         """
         Process a message directly (for CLI or cron usage).
 
+        Note: MCP tools should be registered once during startup, not here.
+        See AgentLoop.run() or CLI initialization for MCP registration.
+
         Args:
             content: The message content.
             session_key: Session identifier.
@@ -600,9 +625,6 @@ class AgentLoop:
         Returns:
             The agent's response.
         """
-        # Register individual MCP tools for direct access
-        await self._register_mcp_tools_async()
-
         msg = InboundMessage(
             channel=channel,
             sender_id="user",
