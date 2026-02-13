@@ -15,14 +15,15 @@ from mcp.client.session import ClientSession
 def _create_http_client() -> httpx.AsyncClient:
     """Create an httpx client configured for MCP HTTP transport.
 
-    Uses HTTP/1.1 only and explicitly disables proxies to avoid
-    issues with system proxy settings (e.g., macOS network proxy).
+    Uses HTTP/1.1 only and explicitly disables proxies and environment
+    variables to avoid issues with system proxy settings.
     """
     return httpx.AsyncClient(
         http1=True,
         http2=False,
         follow_redirects=True,
         proxy=None,  # Explicitly disable proxy
+        trust_env=False,  # Disable reading proxy from environment
     )
 
 

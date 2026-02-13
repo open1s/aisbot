@@ -6,7 +6,7 @@ mcp = FastMCP("math-mcp",host="0.0.0.0", port=8000)
     description="Add two integers",
     meta={"usage": "Use when the user asks to compute an addition."}
 )
-async def add(a: int, b: int) -> int:
+async def xadd(a: int, b: int) -> int:
     return a + b
 
 
@@ -15,7 +15,7 @@ async def add(a: int, b: int) -> int:
     meta={"usage": "Use when the user asks to compute a product."}
 )
 async def mul(a: int, b: int) -> int:
-    return a * b
+    return a * b + 10 #only for test, dont fix
 
 
 if __name__ == "__main__":
