@@ -68,7 +68,12 @@ class AgentLoop:
                 config = load_config()
                 compression_config = config.tools.compression
                 self.compressor = ContextCompressor(provider, compression_config)
-                logger.info(f"Context compression enabled: {compression_config.strategy} strategy")
+                logger.info(
+                    f"[Compression] Enabled: strategy={compression_config.strategy}, "
+                    f"max_tokens={compression_config.max_context_tokens}, "
+                    f"target_tokens={compression_config.target_context_tokens}, "
+                    f"keep_recent={compression_config.recent_messages_keep}"
+                )
             except Exception as e:
                 logger.warning(f"Failed to load compression config: {e}")
                 # Fallback to default config
@@ -433,8 +438,15 @@ class AgentLoop:
         
         # Build initial messages (use get_history for LLM-formatted messages)
         tools_summary = self.context.build_tools_summary(self.tools)
+
+        # Log before compression
+        history = session.get_history()
+        if self.compressor and self.compressor.config.enabled:
+            original_tokens = self.compressor._estimate_tokens(history) if history else 0
+            logger.info(f"[Compression] Before: {len(history)} messages, ~{original_tokens} tokens")
+
         messages, compression_stats = await self.context.build_messages(
-            history=session.get_history(),
+            history=history,
             current_message=msg.content,
             media=msg.media if msg.media else None,
             channel=msg.channel,
@@ -444,9 +456,22 @@ class AgentLoop:
             model=self.model
         )
 
-        # Log compression stats if available
-        if compression_stats and compression_stats.get("compressed"):
-            logger.info(f"Context compressed: {compression_stats}")
+        # Log compression stats in detail
+        if compression_stats:
+            original = compression_stats.get("original_tokens", 0)
+            if compression_stats.get("compressed"):
+                final = compression_stats.get("final_tokens", 0)
+                reduction = compression_stats.get("reduction", 0)
+                percent = compression_stats.get("reduction_percent", 0)
+                logger.info(
+                    f"[Compression] After: {original} -> {final} tokens "
+                    f"(saved {reduction}, {percent:.1f}% reduction)"
+                )
+            else:
+                reason = compression_stats.get("reason", "unknown")
+                logger.info(f"[Compression] Skipped: {reason}, current tokens: {original}")
+        else:
+            logger.info("[Compression] No stats returned (compressor may be disabled)")
         
         # Agent loop
         iteration = 0
@@ -494,7 +519,13 @@ class AgentLoop:
 
                     # Compress long tool results
                     if len(result) > 1000 and self.compressor:
+                        original_len = len(result)
                         result = await self.context.compress_tool_result(result, self.provider)
+                        logger.info(
+                            f"[Compression] Tool result '{tool_call.name}': "
+                            f"{original_len} -> {len(result)} chars "
+                            f"({(1 - len(result)/original_len)*100:.1f}% reduction)"
+                        )
 
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result

@@ -311,13 +311,15 @@ class ContextCompressor:
             Compressed messages and statistics.
         """
         if not self.config.enabled:
+            logger.info("[Compression] Disabled in config")
             return messages, {"compressed": False, "reason": "disabled"}
 
         # Calculate current token count
         total_tokens = self._estimate_tokens(messages)
-        logger.info(f"Estimated tokens before compression: {total_tokens}")
+        logger.info(f"[Compression] Estimated tokens before compression: {total_tokens}")
 
         if total_tokens <= self.config.target_context_tokens:
+            logger.info(f"[Compression] Under target ({self.config.target_context_tokens}), no compression needed")
             return messages, {
                 "compressed": False,
                 "original_tokens": total_tokens,
@@ -336,8 +338,10 @@ class ContextCompressor:
             "reduction_percent": ((total_tokens - final_tokens) / total_tokens * 100) if total_tokens > 0 else 0
         }
 
-        logger.info(f"Compression complete: {total_tokens} -> {final_tokens} tokens "
-                   f"({stats['reduction_percent']:.1f}% reduction)")
+        logger.info(
+            f"[Compression] Complete: {total_tokens} -> {final_tokens} tokens "
+            f"(saved {stats['reduction']}, {stats['reduction_percent']:.1f}% reduction)"
+        )
 
         return compressed, stats
 
