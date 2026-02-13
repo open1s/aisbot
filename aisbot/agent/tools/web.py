@@ -44,10 +44,10 @@ def _validate_url(url: str) -> tuple[bool, str]:
 
 
 class WebSearchTool(Tool):
-    """Search the web using Brave Search API."""
+    """Search the web using DuckDuckGo (no API key required)."""
     
     name = "web_search"
-    description = "Search the web. Returns titles, URLs, and snippets."
+    description = "Search the web using DuckDuckGo. Returns titles, URLs, and snippets."
     parameters = {
         "type": "object",
         "properties": {
@@ -58,36 +58,93 @@ class WebSearchTool(Tool):
     }
     
     def __init__(self, api_key: str | None = None, max_results: int = 5):
-        self.api_key = api_key or os.environ.get("BRAVE_API_KEY", "")
+        # api_key parameter kept for backward compatibility, but not used for DuckDuckGo
         self.max_results = max_results
     
     async def execute(self, query: str, count: int | None = None, **kwargs: Any) -> str:
-        if not self.api_key:
-            return "Error: BRAVE_API_KEY not configured"
-        
         try:
             n = min(max(count or self.max_results, 1), 10)
+            
+            # DuckDuckGo HTML search
             async with httpx.AsyncClient() as client:
+                # Use DuckDuckGo HTML search
                 r = await client.get(
-                    "https://api.search.brave.com/res/v1/web/search",
-                    params={"q": query, "count": n},
-                    headers={"Accept": "application/json", "X-Subscription-Token": self.api_key},
+                    "https://html.duckduckgo.com/html/",
+                    params={"q": query},
+                    headers={"User-Agent": USER_AGENT},
                     timeout=10.0
                 )
                 r.raise_for_status()
-            
-            results = r.json().get("web", {}).get("results", [])
+                
+                html_content = r.text
+                
+                # Parse search results from HTML
+                results = self._parse_duckduckgo_results(html_content)
+                
             if not results:
                 return f"No results for: {query}"
             
             lines = [f"Results for: {query}\n"]
             for i, item in enumerate(results[:n], 1):
-                lines.append(f"{i}. {item.get('title', '')}\n   {item.get('url', '')}")
+                lines.append(f"{i}. {item.get('title', 'No title')}\n   {item.get('url', '')}")
                 if desc := item.get("description"):
                     lines.append(f"   {desc}")
             return "\n".join(lines)
         except Exception as e:
             return f"Error: {e}"
+    
+    def _parse_duckduckgo_results(self, html_content: str) -> list[dict[str, Any]]:
+        """Parse DuckDuckGo HTML search results."""
+        import re
+        
+        results = []
+        # Pattern to match result blocks in DuckDuckGo HTML
+        # DuckDuckGo uses a specific structure with result__a, result__snippet, etc.
+        result_blocks = re.findall(
+            r'<a rel="nofollow" class="result__a" href="(.*?)".*?>(.*?)</a>.*?<a class="result__snippet".*?>(.*?)</a>',
+            html_content,
+            re.DOTALL
+        )
+        
+        for url, title, snippet in result_blocks:
+            # Clean up HTML tags and entities
+            title = _strip_tags(title).strip()
+            snippet = _strip_tags(snippet).strip()
+            url = html.unescape(url).strip()
+            
+            # Skip if missing essential fields
+            if not title or not url:
+                continue
+                
+            results.append({
+                "title": title,
+                "url": url,
+                "description": snippet
+            })
+        
+        # Fallback: try alternative pattern if first one fails
+        if not results:
+            # Alternative pattern for different DuckDuckGo HTML structure
+            alt_blocks = re.findall(
+                r'<h2 class="result__title">.*?<a.*?href="(.*?)".*?>(.*?)</a>.*?</h2>.*?<div class="result__snippet">(.*?)</div>',
+                html_content,
+                re.DOTALL
+            )
+            for url, title, snippet in alt_blocks:
+                title = _strip_tags(title).strip()
+                snippet = _strip_tags(snippet).strip()
+                url = html.unescape(url).strip()
+                
+                if not title or not url:
+                    continue
+                    
+                results.append({
+                    "title": title,
+                    "url": url,
+                    "description": snippet
+                })
+        
+        return results
 
 
 class WebFetchTool(Tool):
