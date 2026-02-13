@@ -246,7 +246,6 @@ class SystemPromptCache:
                 logger.debug(f"Cache hit for {key}")
                 return cached_prompt
 
-        logger.debug(f"Cache miss for {key}")
         return None
 
     def set(self, key: str, prompt: str, content: str) -> None:
@@ -260,7 +259,6 @@ class SystemPromptCache:
         """
         content_hash = self._calculate_hash(content)
         self._cache[key] = (prompt, content_hash)
-        logger.debug(f"Cached prompt for {key}")
 
     def clear(self) -> None:
         """Clear cache."""
@@ -312,10 +310,8 @@ class ContextCompressor:
 
         # Calculate current token count
         total_tokens = self._estimate_tokens(messages)
-        logger.info(f"[Compression] Estimated tokens before compression: {total_tokens}")
-
+        
         if total_tokens <= self.config.target_context_tokens:
-            logger.info(f"[Compression] Under target ({self.config.target_context_tokens}), no compression needed")
             return messages, {
                 "compressed": False,
                 "original_tokens": total_tokens,

@@ -161,7 +161,6 @@ class MCPProxyTool(Tool):
             if server_name not in self._tool_info_cache:
                 try:
                     self._tool_info_cache[server_name] = await self._fetch_tools(cfg)
-                    logger.info(f"Preloaded {len(self._tool_info_cache[server_name])} tools from MCP server: {server_name}")
                 except Exception as e:
                     logger.warning(f"Failed to preload tools from {server_name}: {e}")
                     self._tool_info_cache[server_name] = []
@@ -238,7 +237,6 @@ class MCPProxyTool(Tool):
 
             elif transport == "http":
                 url = cfg["url"]
-                logger.info(f"Connecting to HTTP MCP server at {url}")
                 try:
                     client = _create_http_client()
                     async with client:

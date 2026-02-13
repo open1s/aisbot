@@ -142,7 +142,6 @@ class AgentLoop:
             try:
                 self._mcp_proxy = MCPProxyTool(config_file=mcp_config_file)
                 self.tools.register(self._mcp_proxy)
-                logger.info(f"Loaded MCP proxy from {mcp_config_file}")
                 break
             except Exception as e:
                 logger.error(f"Failed to load MCP from {mcp_config_file}: {e}")
@@ -226,8 +225,6 @@ class AgentLoop:
         history = session.get_history()
         if self.compressor and self.compressor.config.enabled:
             original_tokens = self.compressor._estimate_tokens(history) if history else 0
-            logger.info(f"[Compression] Before: {len(history)} messages, ~{original_tokens} tokens")
-
         messages, compression_stats = await self.context.build_messages(
             history=history,
             current_message=msg.content,
@@ -252,7 +249,6 @@ class AgentLoop:
                 )
             else:
                 reason = compression_stats.get("reason", "unknown")
-                logger.info(f"[Compression] Skipped: {reason}, current tokens: {original}")
         else:
             logger.info("[Compression] No stats returned (compressor may be disabled)")
         
