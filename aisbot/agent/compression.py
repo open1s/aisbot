@@ -68,7 +68,6 @@ class SummaryStrategy(CompressionStrategy):
                 model=None  # Use default model
             )
             summary = response.content.strip()
-            logger.debug(f"Summary generated: {len(content)} -> {len(summary)} chars")
             return summary or content
         except Exception as e:
             logger.error(f"Failed to generate summary: {e}")
@@ -100,7 +99,6 @@ class TruncationStrategy(CompressionStrategy):
         if break_point > target_length * 0.7:  # Only if we found a good break point
             truncated = truncated[:break_point + 1]
 
-        logger.debug(f"Truncated: {len(content)} -> {len(truncated)} chars")
         return truncated + "..." if len(truncated) < len(content) else truncated
 
     def estimate_tokens(self, content: str) -> int:
@@ -149,8 +147,6 @@ class SemanticStrategy(CompressionStrategy):
         keep_sections.sort(key=lambda s: sections.index(s))
 
         compressed = "\n\n".join(keep_sections)
-        logger.debug(f"Semantic compression: {len(sections)} -> {len(keep_sections)} sections")
-
         return compressed
 
     def _split_sections(self, content: str) -> list[str]:
