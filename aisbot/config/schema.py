@@ -122,7 +122,6 @@ class ToolsConfig(BaseModel):
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
     restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
-    compression: CompressionConfig = Field(default_factory=CompressionConfig)
 
 
 class Config(BaseSettings):
@@ -132,6 +131,7 @@ class Config(BaseSettings):
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
+    compression: CompressionConfig = Field(default_factory=CompressionConfig)
     
     @property
     def workspace_path(self) -> Path:

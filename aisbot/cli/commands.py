@@ -154,7 +154,7 @@ def _make_provider(config):
     model = config.agents.defaults.model
     if not (p and p.api_key) and not model.startswith("bedrock/"):
         console.print("[red]Error: No API key configured.[/red]")
-        console.print("Set one in ~/.aisbot/config.json under providers section")
+        console.print("Set one in ~/.aisbot/config.yaml under providers section")
         raise typer.Exit(1)
     return ProviderFactory(
         api_key=p.api_key if p else None,

@@ -65,7 +65,7 @@ class AgentLoop:
             try:
                 from aisbot.config.loader import load_config
                 config = load_config()
-                compression_config = config.tools.compression
+                compression_config = config.compression
                 self.compressor = ContextCompressor(provider, compression_config)
             except Exception as e:
                 logger.warning(f"Failed to load compression config: {e}")
