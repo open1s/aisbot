@@ -3,11 +3,27 @@ import yaml
 from pathlib import Path
 from typing import Any, Dict, Optional, List
 
+import httpx
+from loguru import logger
 from aisbot.agent.tools.base import Tool
 
 from mcp.client.stdio import stdio_client, StdioServerParameters
 from mcp.client.streamable_http import streamable_http_client
 from mcp.client.session import ClientSession
+
+
+def _create_http_client() -> httpx.AsyncClient:
+    """Create an httpx client configured for MCP HTTP transport.
+
+    Uses HTTP/1.1 only and explicitly disables proxies to avoid
+    issues with system proxy settings (e.g., macOS network proxy).
+    """
+    return httpx.AsyncClient(
+        http1=True,
+        http2=False,
+        follow_redirects=True,
+        proxy=None,  # Explicitly disable proxy
+    )
 
 
 class MCPProxyTool(Tool):
@@ -120,19 +136,21 @@ class MCPProxyTool(Tool):
             from mcp.types import TextContent
 
             url = cfg["url"]
-            async with streamable_http_client(url=url) as (
-                reader,
-                writer,
-                _get_session_id,
-            ):
-                async with ClientSession(reader, writer) as session:
-                    await session.initialize()
-                    result = await session.call_tool(tool_name, arguments=args)
-                    if result.content and isinstance(result.content[0], TextContent):
-                        return result.content[0].text
-                    elif result.content:
-                        return str(result.content[0])
-                    return "(no output)"
+            client = _create_http_client()
+            async with client:
+                async with streamable_http_client(url=url, http_client=client) as (
+                    reader,
+                    writer,
+                    _get_session_id,
+                ):
+                    async with ClientSession(reader, writer) as session:
+                        await session.initialize()
+                        result = await session.call_tool(tool_name, arguments=args)
+                        if result.content and isinstance(result.content[0], TextContent):
+                            return result.content[0].text
+                        elif result.content:
+                            return str(result.content[0])
+                        return "(no output)"
         except Exception as e:
             return f"HTTP MCP error: {str(e)}"
 
@@ -210,32 +228,36 @@ class MCPProxyTool(Tool):
                 url = cfg["url"]
                 logger.info(f"Connecting to HTTP MCP server at {url}")
                 try:
-                    async with streamable_http_client(url=url) as (
-                        reader,
-                        writer,
-                        _get_session_id,
-                    ):
-                        async with ClientSession(reader, writer) as session:
-                            await session.initialize()
-                            tools_result = await session.list_tools()
-                            for t in tools_result.tools:
-                                meta = getattr(t, "_meta", None) or {}
-                                usage = meta.get("usage") if meta else None
-                                tools_info.append(
-                                    {
-                                        "name": t.name,
-                                        "description": t.description or "",
-                                        "parameters": t.inputSchema,
-                                        "usage": usage,
-                                    }
-                                )
+                    client = _create_http_client()
+                    async with client:
+                        async with streamable_http_client(url=url, http_client=client) as (
+                            reader,
+                            writer,
+                            _get_session_id,
+                        ):
+                            async with ClientSession(reader, writer) as session:
+                                await session.initialize()
+                                tools_result = await session.list_tools()
+                                for t in tools_result.tools:
+                                    meta = getattr(t, "_meta", None) or {}
+                                    usage = meta.get("usage") if meta else None
+                                    tools_info.append(
+                                        {
+                                            "name": t.name,
+                                            "description": t.description or "",
+                                            "parameters": t.inputSchema,
+                                            "usage": usage,
+                                        }
+                                    )
                 except Exception as e:
                     logger.error(f"HTTP MCP connection error: {e}")
                     import traceback
                     logger.error(traceback.format_exc())
                     raise
-        except Exception:
+        except Exception as e:
             # Fail gracefully; LLM can still see other servers
+            if transport == "http":
+                logger.error(f"Failed to fetch tools from HTTP MCP server: {e}")
             pass
 
         return tools_info
