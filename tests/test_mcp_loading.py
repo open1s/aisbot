@@ -45,7 +45,6 @@ async def test_agent_loop_loads_mcp_proxy_from_workspace_config(tmp_path: Path) 
         bus=_DummyBus(),  # type: ignore[arg-type]
         provider=_DummyProvider(),
         workspace=tmp_path,
-        brave_api_key=None,
     )
 
     assert agent.tools.has("mcp_proxy")
