@@ -1,0 +1,35 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "aisbot (asyncio debug, safe)",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "aisbot",
+            "args": [
+                "agent",
+            ],
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "PYTHONASYNCIODEBUG": "1",
+                "PYTHONMALLOC": "debug",
+                "PYTHONDONTWRITEBYTECODE": "1"
+            }
+        },
+        {
+            "name": "Current File",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal",
+            "justMyCode": false,
+            "env": {
+                "PYTHONASYNCIODEBUG": "1",
+                "PYTHONMALLOC": "debug",
+                "PYTHONDONTWRITEBYTECODE": "1"
+            }
+        }
+    ]
+}
