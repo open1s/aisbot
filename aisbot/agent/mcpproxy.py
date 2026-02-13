@@ -155,6 +155,17 @@ class MCPProxyTool(Tool):
         except Exception as e:
             return f"HTTP MCP error: {str(e)}"
 
+    async def preload_tools(self) -> None:
+        """Preload tool info from all MCP servers (call during startup)."""
+        for server_name, cfg in self.servers.items():
+            if server_name not in self._tool_info_cache:
+                try:
+                    self._tool_info_cache[server_name] = await self._fetch_tools(cfg)
+                    logger.info(f"Preloaded {len(self._tool_info_cache[server_name])} tools from MCP server: {server_name}")
+                except Exception as e:
+                    logger.warning(f"Failed to preload tools from {server_name}: {e}")
+                    self._tool_info_cache[server_name] = []
+
     async def _generate_summary(self) -> str:
         """
         Generate detailed summary of all MCP servers for LLM:

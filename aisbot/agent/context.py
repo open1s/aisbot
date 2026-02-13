@@ -167,7 +167,11 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
 
         # Group tools by source
         tools_by_source = defaultdict(list)
+        mcp_proxy = None
         for tool_name, tool in tools_registry._tools.items():
+            if tool_name == "mcp_proxy":
+                mcp_proxy = tool
+                continue  # Handle MCP proxy separately
             source = getattr(tool, "source", None) or "local"
             description = getattr(tool, "description", "")
             tools_by_source[source].append((tool_name, description))
@@ -181,10 +185,30 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
                 parts.append(f"- **{tool_name}**: {description}")
             parts.append("")
 
-        # MCP tools
-        if "mcp" in tools_by_source:
+        # MCP tools section (show cached info if available)
+        if mcp_proxy:
             parts.append("## MCP Tools\n")
-            parts.append("Tools from MCP servers (Model Context Protocol):\n")
+            # Check if we have cached tool info
+            if mcp_proxy._tool_info_cache:
+                for server_name, tools_info in mcp_proxy._tool_info_cache.items():
+                    if tools_info:
+                        parts.append(f"### {server_name}\n")
+                        for t in tools_info:
+                            desc = t.get("description", "")[:80]
+                            parts.append(f"- **{t.get('name')}**: {desc}")
+                        parts.append("")
+            else:
+                # No cache yet, show how to get MCP tools
+                servers = list(getattr(mcp_proxy, "servers", {}).keys())
+                if servers:
+                    parts.append("MCP servers configured (tools not yet loaded):\n")
+                    for s in servers:
+                        parts.append(f"- {s}")
+                    parts.append("\nUse `mcp_proxy` with action='summary' to list available MCP tools.\n")
+
+        # MCP tools from registry (old style, if any)
+        if "mcp" in tools_by_source:
+            parts.append("## MCP Tools (Registered)\n")
             for tool_name, description in tools_by_source["mcp"]:
                 parts.append(f"- **{tool_name}**: {description}")
             parts.append("")

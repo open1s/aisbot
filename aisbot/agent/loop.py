@@ -12,7 +12,7 @@ from aisbot.bus.events import InboundMessage, OutboundMessage
 from aisbot.bus.squeue import MessageBus
 from aisbot.providers.base import BaseProvider
 from aisbot.agent.context import ContextBuilder
-from aisbot.agent.compression import ContextCompressor
+from aisbot.agent.compression import CompressionConfig, ContextCompressor
 from aisbot.agent.tools.registry import ToolRegistry
 from aisbot.agent.tools.filesystem import ReadFileTool, WriteFileTool, EditFileTool, ListDirTool
 from aisbot.agent.tools.shell import ExecTool
@@ -21,6 +21,7 @@ from aisbot.agent.tools.message import MessageTool
 from aisbot.agent.tools.spawn import SpawnTool
 from aisbot.agent.tools.cron import CronTool
 from aisbot.agent.subagent import SubagentManager
+from aisbot.agent.mcpproxy import MCPProxyTool
 from aisbot.session.manager import SessionManager
 
 
@@ -68,12 +69,6 @@ class AgentLoop:
                 config = load_config()
                 compression_config = config.tools.compression
                 self.compressor = ContextCompressor(provider, compression_config)
-                logger.info(
-                    f"[Compression] Enabled: strategy={compression_config.strategy}, "
-                    f"max_tokens={compression_config.max_context_tokens}, "
-                    f"target_tokens={compression_config.target_context_tokens}, "
-                    f"keep_recent={compression_config.recent_messages_keep}"
-                )
             except Exception as e:
                 logger.warning(f"Failed to load compression config: {e}")
                 # Fallback to default config
@@ -94,11 +89,9 @@ class AgentLoop:
         )
         
         self._running = False
+        self._mcp_proxy: MCPProxyTool | None = None
         self._register_default_tools_sync()
-
-    async def initialize(self) -> None:
-        """Initialize the agent loop. Register MCP tools for LLM access."""
-        await self._register_mcp_tools_async()
+        self._load_mcp_proxy_sync()
 
     def _register_default_tools_sync(self) -> None:
         """Register the default set of tools (synchronous part)."""
@@ -132,246 +125,39 @@ class AgentLoop:
         if self.cron_service:
             self.tools.register(CronTool(self.cron_service))
 
-        # Load MCP proxy tool (synchronous)
+    def _load_mcp_proxy_sync(self) -> None:
+        """Load MCP proxy tool synchronously (config loading only, no server connection)."""
+        # Find MCP config file
         mcp_config_env = os.environ.get("AISBOT_MCP_CONFIG")
         mcp_config_candidates = []
         if mcp_config_env:
             mcp_config_candidates.append(Path(mcp_config_env).expanduser())
-        
-        mcp_config_candidates.extend(
-            [
-                self.workspace / "config.yaml",
-                Path.cwd() / "config.yaml",
-                Path.home() / ".aisbot" / "config.yaml",
-            ]
-        )
+
+        mcp_config_candidates.extend([
+            self.workspace / "config.yaml",
+            Path.cwd() / "config.yaml",
+            Path.home() / ".aisbot" / "config.yaml",
+        ])
 
         for mcp_config_file in mcp_config_candidates:
             if not mcp_config_file.exists():
                 continue
             try:
-                from aisbot.agent.mcpproxy import MCPProxyTool
-
-                mcp_proxy = MCPProxyTool(config_file=mcp_config_file)
-                self.tools.register(mcp_proxy)
-                logger.info(f"Loaded MCP tools from {mcp_config_file}")
+                self._mcp_proxy = MCPProxyTool(config_file=mcp_config_file)
+                self.tools.register(self._mcp_proxy)
+                logger.info(f"Loaded MCP proxy from {mcp_config_file}")
                 break
             except Exception as e:
-                logger.error(f"Failed to load MCP tools from {mcp_config_file}: {e}")
-
-    async def _register_mcp_tools_async(self) -> None:
-        """Register individual MCP tools for direct LLM access (asynchronous)."""
-        mcp_proxy = self.tools.get("mcp_proxy")
-        if not mcp_proxy:
-            return
-
-        from aisbot.agent.mcpproxy import MCPProxyTool
-
-        if not isinstance(mcp_proxy, MCPProxyTool):
-            return
-
-        # Check if MCP tools are already registered to avoid redundant work
-        # Look for any tool with "mcp" source field
-        mcp_tools_already_registered = any(
-            getattr(tool, "source", None) == "mcp"
-            for tool in self.tools._tools.values()
-        )
-        if mcp_tools_already_registered:
-            logger.debug("MCP tools already registered, skipping re-registration")
-            return
-
-        await self._register_mcp_tools(mcp_proxy)
-
-    async def _execute_mcp_tool(self, tool_call: Any, tool: Any) -> str:
-        """
-        Execute an MCP tool call with function verification.
-
-        Args:
-            tool_call: Tool call request with name and arguments.
-            tool: The MCP tool wrapper object.
-
-        Returns:
-            Tool execution result as string.
-        """
-        from aisbot.agent.mcpproxy import MCPProxyTool
-
-        # Get MCP metadata from tool
-        server_name = getattr(tool, "_server_name", None)
-        mcp_tool_name = getattr(tool, "_mcp_tool_name", None)
-        transport = getattr(tool, "_transport", None)
-
-        if not server_name or not mcp_tool_name or not transport:
-            return f"Error: Invalid MCP tool metadata for '{tool_call.name}'"
-
-        # Get MCP proxy tool
-        mcp_proxy = self.tools.get("mcp_proxy")
-        if not isinstance(mcp_proxy, MCPProxyTool):
-            return "Error: MCP proxy tool not available"
-
-        # Verify server exists
-        if server_name not in mcp_proxy.servers:
-            available_servers = ", ".join(mcp_proxy.servers.keys())
-            return f"Error: MCP server '{server_name}' not found. Available servers: {available_servers}"
-
-        # Verify tool exists on server
-        if server_name not in mcp_proxy._tool_info_cache:
-            # Fetch tools if not cached
-            cfg = mcp_proxy.servers[server_name]
-            mcp_proxy._tool_info_cache[server_name] = await mcp_proxy._fetch_tools(cfg)
-
-        server_tools = mcp_proxy._tool_info_cache.get(server_name, [])
-        tool_info = None
-        for t in server_tools:
-            if t.get("name") == mcp_tool_name:
-                tool_info = t
-                break
-
-        if not tool_info:
-            available_tools = ", ".join(t.get("name", "?") for t in server_tools)
-            return f"Error: Tool '{mcp_tool_name}' not found on server '{server_name}'. Available tools: {available_tools}"
-
-        # Verify parameters against tool schema
-        params_schema = tool_info.get("parameters", {})
-        validation_errors = self._validate_mcp_params(tool_call.arguments, params_schema)
-        if validation_errors:
-            return f"Error: Parameter validation failed for '{mcp_tool_name}': " + "; ".join(validation_errors)
-
-        # Execute the MCP tool
-        try:
-            if transport == "stdio":
-                result = await mcp_proxy._call_stdio(
-                    mcp_proxy.servers[server_name],
-                    mcp_tool_name,
-                    tool_call.arguments
-                )
-            elif transport == "http":
-                result = await mcp_proxy._call_http(
-                    mcp_proxy.servers[server_name],
-                    mcp_tool_name,
-                    tool_call.arguments
-                )
-            else:
-                return f"Error: Unsupported transport '{transport}'"
-            return result
-        except Exception as e:
-            return f"Error executing MCP tool '{mcp_tool_name}': {str(e)}"
-
-    def _validate_mcp_params(
-        self,
-        params: dict[str, Any],
-        schema: dict[str, Any]
-    ) -> list[str]:
-        """
-        Validate parameters against MCP tool schema.
-
-        Args:
-            params: Parameters to validate.
-            schema: JSON Schema for parameters.
-
-        Returns:
-            List of validation error messages (empty if valid).
-        """
-        errors = []
-
-        if not schema or schema.get("type") != "object":
-            return errors
-
-        properties = schema.get("properties", {})
-        required = set(schema.get("required", []))
-
-        # Check required parameters
-        for req in required:
-            if req not in params:
-                errors.append(f"Missing required parameter: '{req}'")
-
-        # Check parameter types
-        for param_name, param_value in params.items():
-            if param_name not in properties:
-                errors.append(f"Unknown parameter: '{param_name}'")
-                continue
-
-            param_schema = properties[param_name]
-            param_type = param_schema.get("type")
-
-            if param_type == "string":
-                if not isinstance(param_value, str):
-                    errors.append(f"Parameter '{param_name}' must be string, got {type(param_value).__name__}")
-            elif param_type == "number":
-                if not isinstance(param_value, (int, float)):
-                    errors.append(f"Parameter '{param_name}' must be number, got {type(param_value).__name__}")
-            elif param_type == "integer":
-                if not isinstance(param_value, int):
-                    errors.append(f"Parameter '{param_name}' must be integer, got {type(param_value).__name__}")
-            elif param_type == "boolean":
-                if not isinstance(param_value, bool):
-                    errors.append(f"Parameter '{param_name}' must be boolean, got {type(param_value).__name__}")
-            elif param_type == "array":
-                if not isinstance(param_value, list):
-                    errors.append(f"Parameter '{param_name}' must be array, got {type(param_value).__name__}")
-            elif param_type == "object":
-                if not isinstance(param_value, dict):
-                    errors.append(f"Parameter '{param_name}' must be object, got {type(param_value).__name__}")
-
-        return errors
-
-    async def _register_mcp_tools(self, mcp_proxy: Any) -> None:
-        """
-        Register individual MCP tools for direct LLM access.
-
-        Each MCP tool is registered with its original name from the MCP server.
-        The source field is used to identify MCP tools.
-
-        Args:
-            mcp_proxy: The MCPProxyTool instance.
-        """
-        for server_name, cfg in mcp_proxy.servers.items():
-            transport = cfg.get("transport", "stdio")
-
-            # Fetch tools from server
-            if server_name not in mcp_proxy._tool_info_cache:
-                mcp_proxy._tool_info_cache[server_name] = await mcp_proxy._fetch_tools(cfg)
-
-            tools = mcp_proxy._tool_info_cache.get(server_name, [])
-
-            for tool in tools:
-                tool_name = tool.get("name")
-                if not tool_name:
-                    continue
-
-                # Use the original tool name from MCP server
-                # Add prefix if tool name conflicts with local tools
-                full_tool_name = f"{server_name}_{tool_name}"
-                if self.tools.has(full_tool_name):
-                    # Tool already registered, skip to avoid conflicts
-                    logger.debug(f"MCP tool already registered: {full_tool_name} (from {server_name})")
-                    continue
-
-                # Register as a wrapper tool
-                self.tools.register(_MCPToolWrapper(
-                    name=full_tool_name,
-                    description=tool.get("description", ""),
-                    parameters=tool.get("parameters", {}),
-                    mcp_proxy=mcp_proxy,
-                    server_name=server_name,
-                    mcp_tool_name=tool_name,
-                    transport=transport,
-                ))
-                logger.info(f"Registered MCP tool: {full_tool_name} (from {server_name})")
+                logger.error(f"Failed to load MCP from {mcp_config_file}: {e}")
 
     async def run(self) -> None:
         """Run the agent loop, processing messages from the bus."""
         self._running = True
         logger.info("Agent loop started")
 
-        # Register MCP tools if not already initialized
-        # For optimal performance, call initialize() before run()
-        mcp_tools_already_registered = any(
-            getattr(tool, "source", None) == "mcp"
-            for tool in self.tools._tools.values()
-        )
-        if not mcp_tools_already_registered:
-            logger.debug("MCP tools not initialized, registering now")
-            await self._register_mcp_tools_async()
+        # Preload MCP tools info
+        if self._mcp_proxy:
+            await self._mcp_proxy.preload_tools()
 
         while self._running:
             try:
@@ -510,12 +296,7 @@ class AgentLoop:
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info(f"Tool call: {tool_call.name}({args_str[:200]})")
 
-                    # Check if tool is MCP tool via source field
-                    tool = self.tools.get(tool_call.name)
-                    if tool and getattr(tool, "source", None) == "mcp":
-                        result = await self._execute_mcp_tool(tool_call, tool)
-                    else:
-                        result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    result = await self.tools.execute(tool_call.name, tool_call.arguments)
 
                     # Compress long tool results
                     if len(result) > 1000 and self.compressor:
@@ -591,7 +372,7 @@ class AgentLoop:
         
         # Build messages with the announce content
         tools_summary = self.context.build_tools_summary(self.tools)
-        messages = self.context.build_messages(
+        messages, _ = await self.context.build_messages(
             history=session.get_history(),
             current_message=msg.content,
             channel=origin_channel,
@@ -632,12 +413,7 @@ class AgentLoop:
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info(f"Tool call: {tool_call.name}({args_str[:200]})")
 
-                    # Check if tool is MCP tool via source field
-                    tool = self.tools.get(tool_call.name)
-                    if tool and getattr(tool, "source", None) == "mcp":
-                        result = await self._execute_mcp_tool(tool_call, tool)
-                    else:
-                        result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    result = await self.tools.execute(tool_call.name, tool_call.arguments)
 
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
@@ -682,6 +458,10 @@ class AgentLoop:
         Returns:
             The agent's response.
         """
+        # Preload MCP tools if not done yet
+        if self._mcp_proxy and not self._mcp_proxy._tool_info_cache:
+            await self._mcp_proxy.preload_tools()
+
         msg = InboundMessage(
             channel=channel,
             sender_id="user",
@@ -691,122 +471,4 @@ class AgentLoop:
 
         response = await self._process_message(msg)
         return response.content if response else ""
-
-
-class _MCPToolWrapper:
-    """
-    Wrapper for individual MCP tools to expose them to the LLM.
-
-    Each wrapper represents a single tool from an MCP server and provides
-    the standard Tool interface. The source field identifies MCP tools.
-    """
-
-    source = "mcp"  # Field to identify MCP tools
-
-    def __init__(
-        self,
-        name: str,
-        description: str,
-        parameters: dict[str, Any],
-        mcp_proxy: Any,
-        server_name: str,
-        mcp_tool_name: str,
-        transport: str,
-    ):
-        self._name = name
-        self._description = description
-        self._parameters = parameters
-        self._mcp_proxy = mcp_proxy
-        self._server_name = server_name
-        self._mcp_tool_name = mcp_tool_name
-        self._transport = transport
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    @property
-    def description(self) -> str:
-        return self._description
-
-    @property
-    def parameters(self) -> dict[str, Any]:
-        return self._parameters
-
-    def to_schema(self) -> dict[str, Any]:
-        """Convert to OpenAI tool schema format."""
-        return {
-            "type": "function",
-            "function": {
-                "name": self._name,
-                "description": self._description,
-                "parameters": self._parameters,
-            },
-        }
-
-    def validate_params(self, params: dict[str, Any]) -> list[str]:
-        """Validate parameters against the tool schema."""
-        errors = []
-
-        if not self._parameters or self._parameters.get("type") != "object":
-            return errors
-
-        properties = self._parameters.get("properties", {})
-        required = set(self._parameters.get("required", []))
-
-        # Check required parameters
-        for req in required:
-            if req not in params:
-                errors.append(f"Missing required parameter: '{req}'")
-
-        # Check parameter types
-        for param_name, param_value in params.items():
-            if param_name not in properties:
-                errors.append(f"Unknown parameter: '{param_name}'")
-                continue
-
-            param_schema = properties[param_name]
-            param_type = param_schema.get("type")
-
-            if param_type == "string":
-                if not isinstance(param_value, str):
-                    errors.append(f"Parameter '{param_name}' must be string, got {type(param_value).__name__}")
-            elif param_type == "number":
-                if not isinstance(param_value, (int, float)):
-                    errors.append(f"Parameter '{param_name}' must be number, got {type(param_value).__name__}")
-            elif param_type == "integer":
-                if not isinstance(param_value, int):
-                    errors.append(f"Parameter '{param_name}' must be integer, got {type(param_value).__name__}")
-            elif param_type == "boolean":
-                if not isinstance(param_value, bool):
-                    errors.append(f"Parameter '{param_name}' must be boolean, got {type(param_value).__name__}")
-            elif param_type == "array":
-                if not isinstance(param_value, list):
-                    errors.append(f"Parameter '{param_name}' must be array, got {type(param_value).__name__}")
-            elif param_type == "object":
-                if not isinstance(param_value, dict):
-                    errors.append(f"Parameter '{param_name}' must be object, got {type(param_value).__name__}")
-
-        return errors
-
-    async def execute(self, **kwargs: Any) -> str:
-        """Execute the MCP tool."""
-        try:
-            if self._transport == "stdio":
-                result = await self._mcp_proxy._call_stdio(
-                    self._mcp_proxy.servers[self._server_name],
-                    self._mcp_tool_name,
-                    kwargs
-                )
-            elif self._transport == "http":
-                result = await self._mcp_proxy._call_http(
-                    self._mcp_proxy.servers[self._server_name],
-                    self._mcp_tool_name,
-                    kwargs
-                )
-            else:
-                return f"Error: Unsupported transport '{self._transport}'"
-            return result
-        except Exception as e:
-            return f"Error executing MCP tool '{self._mcp_tool_name}': {str(e)}"
 

@@ -258,7 +258,6 @@ def gateway(
     async def run():
         try:
             await bus.init()
-            await agent.initialize()
             await cron.start()
             await heartbeat.start()
             await asyncio.gather(
@@ -310,7 +309,6 @@ def agent(
         # Single message mode
         async def run_once():
             await bus.init()
-            await agent_loop.initialize()
             response = await agent_loop.process_direct(message, session_id)
             console.print(f"\n{__logo__} {response}")
 
@@ -321,7 +319,6 @@ def agent(
 
         async def run_interactive():
             await bus.init()
-            await agent_loop.initialize()
             while True:
                 try:
                     user_input = console.input("[bold blue]You:[/bold blue] ")
