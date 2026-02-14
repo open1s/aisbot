@@ -35,7 +35,7 @@ class MCPProxyTool(Tool):
     - Fetches tool list + parameters + common usage for LLM guidance
     """
 
-    def __init__(self, config_file: str | Path = "config.yaml"):
+    def __init__(self, config_file: str | Path = "mcp.yaml"):
         self.config_file = Path(config_file)
         self.servers: Dict[str, Dict[str, Any]] = {}
         self._tool_info_cache: Dict[
@@ -80,7 +80,7 @@ class MCPProxyTool(Tool):
 
         self.servers = data.get("mcp_servers", {})
         if not self.servers:
-            raise ValueError("No MCP servers configured in config.yaml")
+            raise ValueError(f"No MCP servers configured in {self.config_file}")
 
     async def execute(
         self,

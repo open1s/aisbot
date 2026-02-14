@@ -124,16 +124,16 @@ class AgentLoop:
 
     def _load_mcp_proxy_sync(self) -> None:
         """Load MCP proxy tool synchronously (config loading only, no server connection)."""
-        # Find MCP config file
+        # Find MCP config file (prefer mcp.yaml over config.yaml)
         mcp_config_env = os.environ.get("AISBOT_MCP_CONFIG")
         mcp_config_candidates = []
         if mcp_config_env:
             mcp_config_candidates.append(Path(mcp_config_env).expanduser())
 
         mcp_config_candidates.extend([
-            self.workspace / "config.yaml",
-            Path.cwd() / "config.yaml",
-            Path.home() / ".aisbot" / "config.yaml",
+            self.workspace / "mcp.yaml",
+            Path.cwd() / "mcp.yaml",
+            Path.home() / ".aisbot" / "mcp.yaml"
         ])
 
         for mcp_config_file in mcp_config_candidates:
