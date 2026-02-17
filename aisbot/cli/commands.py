@@ -318,8 +318,10 @@ def agent(
             await bus.init()
             response = await agent_loop.process_direct(message, session_id)
             console.print(f"\n{__logo__} {response}")
+            bus.stop()
 
         asyncio.run(run_once())
+        raise typer.Exit()
     else:
         # Interactive mode
         console.print(f"{__logo__} Interactive mode (Ctrl+C to exit)\n")

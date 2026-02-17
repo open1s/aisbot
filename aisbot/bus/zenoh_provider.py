@@ -158,6 +158,7 @@ class ZenohProvider(BusProvider):
 
         if self._session:
             self._session.close()
+            self._session = None
 
         logger.info("Zenoh provider stopped")
 
