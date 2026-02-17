@@ -171,10 +171,15 @@ class AgentLoop:
                 # Wait for next message
                 msg = await asyncio.wait_for(self.bus.consume_inbound(), timeout=1.0)
 
+                if msg is None:
+                    continue
+
+                print(msg)
                 # Process it
                 try:
                     response = await self._process_message(msg)
                     if response:
+                        print("@@"+response)
                         await self.bus.publish_outbound(response)
                 except Exception as e:
                     logger.error(f"Error processing message: {e}")

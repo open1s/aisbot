@@ -1,6 +1,9 @@
 """Async message queue for decoupled channel-agent communication."""
 
+import time
 from typing import Callable, Awaitable
+
+from loguru import logger
 
 from aisbot.bus.events import InboundMessage, OutboundMessage
 from aisbot.bus.provider import BusType
@@ -47,33 +50,63 @@ class MessageBus:
             elif config.provider == "zenoh" and "config" not in provider_kwargs:
                 provider_kwargs["config"] = config.zenoh_config
 
+        logger.debug(f"[MessageBus] Creating bus with type: {bus_type}, kwargs: {provider_kwargs}")
         self._provider = BusFactory.create(bus_type, **provider_kwargs)
         self._running = False
 
     async def init(self) -> None:
         """Initialize the bus provider."""
+        logger.debug("[MessageBus] Initializing...")
+        start = time.perf_counter()
         await self._provider.initialize()
+        elapsed = (time.perf_counter() - start) * 1000
+        logger.debug(f"[MessageBus] Initialized in {elapsed:.2f}ms")
 
     async def publish_inbound(self, msg: InboundMessage) -> None:
         """Publish a message from a channel to the agent."""
+        logger.debug(f"[MessageBus] Publishing inbound: {msg.session_key}")
+        start = time.perf_counter()
         await self._provider.publish_inbound(msg)
+        elapsed = (time.perf_counter() - start) * 1000
+        logger.debug(f"[MessageBus] Published inbound in {elapsed:.2f}ms")
 
     async def consume_inbound(self) -> InboundMessage | None:
         """Consume the next inbound message (blocks until available)."""
-        return await self._provider.consume_inbound()
+        logger.debug("[MessageBus] Consuming inbound...")
+        start = time.perf_counter()
+        msg = await self._provider.consume_inbound()
+        elapsed = (time.perf_counter() - start) * 1000
+        if msg:
+            logger.debug(f"[MessageBus] Consumed inbound in {elapsed:.2f}ms: {msg.session_key}")
+        else:
+            logger.debug(f"[MessageBus] No inbound message (timeout after {elapsed:.2f}ms)")
+        return msg
 
     async def publish_outbound(self, msg: OutboundMessage) -> None:
         """Publish a response from the agent to channels."""
+        logger.debug(f"[MessageBus] Publishing outbound: {msg.channel}:{msg.chat_id}")
+        start = time.perf_counter()
         await self._provider.publish_outbound(msg)
+        elapsed = (time.perf_counter() - start) * 1000
+        logger.debug(f"[MessageBus] Published outbound in {elapsed:.2f}ms")
 
     async def consume_outbound(self) -> OutboundMessage | None:
         """Consume the next outbound message (blocks until available)."""
-        return await self._provider.consume_outbound()
+        logger.debug("[MessageBus] Consuming outbound...")
+        start = time.perf_counter()
+        msg = await self._provider.consume_outbound()
+        elapsed = (time.perf_counter() - start) * 1000
+        if msg:
+            logger.debug(f"[MessageBus] Consumed outbound in {elapsed:.2f}ms: {msg.channel}:{msg.chat_id}")
+        else:
+            logger.debug(f"[MessageBus] No outbound message (timeout after {elapsed:.2f}ms)")
+        return msg
 
     def subscribe_outbound(
         self, channel: str, callback: Callable[[OutboundMessage], Awaitable[None]]
     ) -> None:
         """Subscribe to outbound messages for a specific channel."""
+        logger.debug(f"[MessageBus] Subscribing to outbound channel: {channel}")
         self._provider.subscribe_outbound(channel, callback)
 
     async def dispatch_outbound(self) -> None:
@@ -81,11 +114,14 @@ class MessageBus:
         Dispatch outbound messages to subscribed channels.
         Run this as a background task.
         """
+        logger.debug("[MessageBus] Starting outbound dispatcher")
         await self._provider.dispatch_outbound()
 
     def stop(self) -> None:
         """Stop the dispatcher loop."""
+        logger.debug("[MessageBus] Stopping...")
         self._provider.stop()
+        logger.debug("[MessageBus] Stopped")
 
     @property
     def inbound_size(self) -> int:
