@@ -147,7 +147,9 @@ class MCPProxyTool(Tool):
                     async with ClientSession(reader, writer) as session:
                         await session.initialize()
                         result = await session.call_tool(tool_name, arguments=args)
-                        if result.content and isinstance(result.content[0], TextContent):
+                        if result.content and isinstance(
+                            result.content[0], TextContent
+                        ):
                             return result.content[0].text
                         elif result.content:
                             return str(result.content[0])
@@ -240,7 +242,9 @@ class MCPProxyTool(Tool):
                 try:
                     client = _create_http_client()
                     async with client:
-                        async with streamable_http_client(url=url, http_client=client) as (
+                        async with streamable_http_client(
+                            url=url, http_client=client
+                        ) as (
                             reader,
                             writer,
                             _get_session_id,
@@ -262,6 +266,7 @@ class MCPProxyTool(Tool):
                 except Exception as e:
                     logger.error(f"HTTP MCP connection error: {e}")
                     import traceback
+
                     logger.error(traceback.format_exc())
                     raise
         except Exception as e:

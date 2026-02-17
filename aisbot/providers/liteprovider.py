@@ -20,10 +20,9 @@ class LitellmProvider(BaseProvider):
 
         if self.api_key:
             litellm.api_key = self.api_key
-        
-        litellm.suppress_debug_info = True
-        os.environ['NVIDIA_NIM_API_KEY'] = self.api_key
 
+        litellm.suppress_debug_info = True
+        os.environ["NVIDIA_NIM_API_KEY"] = self.api_key
 
     @classmethod
     def match_model(cls, model: str) -> bool:
@@ -34,15 +33,11 @@ class LitellmProvider(BaseProvider):
 
     async def completions(self, **kwargs):
         import sys
-        
+
         messages = kwargs.get("messages", [{}])
         try:
-            response = completion(
-                    **kwargs
-                )
+            response = completion(**kwargs)
             return response
         except Exception as e:
             print(f"DEBUG API call error: {type(e).__name__}: {e}", file=sys.stderr)
             raise
-
-       

@@ -58,7 +58,9 @@ def save_config(config: Config, config_path: Path | None = None) -> None:
     data = config.model_dump(exclude_none=True)
 
     with open(path, "w", encoding="utf-8") as f:
-        yaml.dump(data, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        yaml.dump(
+            data, f, default_flow_style=False, allow_unicode=True, sort_keys=False
+        )
 
 
 def generate_schema_yaml() -> str:

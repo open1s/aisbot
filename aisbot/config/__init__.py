@@ -8,4 +8,10 @@ from aisbot.config.loader import (
 )
 from aisbot.config.schema import Config
 
-__all__ = ["Config", "load_config", "save_config", "get_config_path", "generate_schema_yaml"]
+__all__ = [
+    "Config",
+    "load_config",
+    "save_config",
+    "get_config_path",
+    "generate_schema_yaml",
+]

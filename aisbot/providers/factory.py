@@ -29,8 +29,7 @@ class ProviderFactory(ABC):
         self.api_base = api_base
         self.default_model = default_model
         self.extra_headers = extra_headers or {}
-        
-    
+
     async def chat(
         self,
         messages: list[dict[str, Any]],
@@ -41,34 +40,34 @@ class ProviderFactory(ABC):
     ) -> LLMResponse:
         """
         Send a chat completion request via LiteLLM.
-        
+
         Args:
             messages: List of message dicts with 'role' and 'content'.
             tools: Optional list of tool definitions in OpenAI format.
             model: Model identifier (e.g., 'anthropic/claude-sonnet-4-5').
             max_tokens: Maximum tokens in response.
             temperature: Sampling temperature.
-        
+
         Returns:
             LLMResponse with content and/or tool calls.
         """
-        model = model or self.default_model 
-        
+        model = model or self.default_model
+
         kwargs: dict[str, Any] = {
             "model": model,
             "messages": messages,
             "max_tokens": max_tokens,
             "temperature": temperature,
         }
-        
+
         # Pass api_base directly for custom endpoints (vLLM, etc.)
         if self.api_base:
             kwargs["api_base"] = self.api_base
-        
+
         # Pass extra headers (e.g. APP-Code for AiHubMix)
         if self.extra_headers:
             kwargs["extra_headers"] = self.extra_headers
-        
+
         if tools:
             kwargs["tools"] = tools
             kwargs["tool_choice"] = "auto"
@@ -78,7 +77,7 @@ class ProviderFactory(ABC):
             raise ValueError(f"No provider found for model: {model}")
 
         provider = provider_class(api_key=self.api_key, api_base=self.api_base)
-        provider.initialize() # Instantiate provider
+        provider.initialize()  # Instantiate provider
 
         try:
             response = await provider.completions(**kwargs)
@@ -89,7 +88,7 @@ class ProviderFactory(ABC):
                 content=f"Error calling LLM: {str(e)}",
                 finish_reason="error",
             )
-    
+
     def _parse_response(self, response: Any) -> LLMResponse:
         """Parse LiteLLM response into our standard format."""
         choice = response.choices[0]
@@ -102,16 +101,19 @@ class ProviderFactory(ABC):
                 args = tc.function.arguments
                 if isinstance(args, str):
                     import json
+
                     try:
                         args = json.loads(args)
                     except json.JSONDecodeError:
                         args = {"raw": args}
 
-                tool_calls.append(ToolCallRequest(
-                    id=tc.id,
-                    name=tc.function.name,
-                    arguments=args,
-                ))
+                tool_calls.append(
+                    ToolCallRequest(
+                        id=tc.id,
+                        name=tc.function.name,
+                        arguments=args,
+                    )
+                )
 
         usage = {}
         if hasattr(response, "usage") and response.usage:
@@ -127,7 +129,7 @@ class ProviderFactory(ABC):
             finish_reason=choice.finish_reason or "stop",
             usage=usage,
         )
-    
+
     @classmethod
     def register_provider(cls, subclass) -> str:
         """
@@ -141,12 +143,12 @@ class ProviderFactory(ABC):
             The provider name used for registration.
         """
         # Get provider name: use `name` attribute if defined, otherwise use class name
-        if hasattr(subclass, 'name') and subclass.name:
+        if hasattr(subclass, "name") and subclass.name:
             provider_name = subclass.name
         else:
             # Use class name, removing 'Provider' suffix if present
             class_name = subclass.__name__
-            if class_name.endswith('Provider'):
+            if class_name.endswith("Provider"):
                 provider_name = class_name[:-8].lower()
             else:
                 provider_name = class_name.lower()
@@ -170,8 +172,6 @@ class ProviderFactory(ABC):
         return None
 
 
-
-
 ProviderFactory.register_provider(LitellmProvider)
 
 # ============================================================================
@@ -188,14 +188,14 @@ ProviderFactory.register_provider(LitellmProvider)
 #     def match_model(cls, model: str) -> bool:
 #         # Match models like: gpt-4, gpt-3.5-turbo, o1-preview, etc.
 #         return model.startswith("gpt-") or model.startswith("o1-")
-# 
+#
 #     def get_default_model(self) -> str:
 #         return "gpt-4"
-# 
+#
 #     async def completions(self, **kwargs):
 #         # Call litellm.completion with OpenAI model
 #         return completion(**kwargs)
-# 
+#
 # # Register the provider (provider name will be "openai" automatically)
 # ProviderFactory.register_provider(OpenAIProvider)
 
@@ -212,13 +212,13 @@ ProviderFactory.register_provider(LitellmProvider)
 #     def match_model(cls, model: str) -> bool:
 #         # Match models like: claude-3-opus, claude-3-sonnet, etc.
 #         return model.startswith("claude-")
-# 
+#
 #     def get_default_model(self) -> str:
 #         return "claude-3-opus-20240229"
-# 
+#
 #     async def completions(self, **kwargs):
 #         return completion(**kwargs)
-# 
+#
 # ProviderFactory.register_provider(AnthropicProvider)
 
 
@@ -232,13 +232,13 @@ ProviderFactory.register_provider(LitellmProvider)
 #     def match_model(cls, model: str) -> bool:
 #         # Match all models from this provider
 #         return model.startswith("custom/")
-# 
+#
 #     def get_default_model(self) -> str:
 #         return "custom/model-1"
-# 
+#
 #     async def completions(self, **kwargs):
 #         return completion(**kwargs)
-# 
+#
 # ProviderFactory.register_provider(CustomAPIProvider)
 
 
@@ -255,13 +255,13 @@ ProviderFactory.register_provider(LitellmProvider)
 #     def match_model(cls, model: str) -> bool:
 #         # Match any model with supported prefix
 #         return any(model.startswith(prefix) for prefix in cls.supported_prefixes)
-# 
+#
 #     def get_default_model(self) -> str:
 #         return "gpt-4"
-# 
+#
 #     async def completions(self, **kwargs):
 #         return completion(**kwargs)
-# 
+#
 # ProviderFactory.register_provider(MultiModelProvider)
 
 

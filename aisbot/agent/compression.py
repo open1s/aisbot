@@ -53,7 +53,9 @@ class SummaryStrategy(CompressionStrategy):
 
     async def compress(self, content: str, target_ratio: float = 0.5) -> str:
         """Generate summary using LLM."""
-        if not content or len(content) < 400:  # Only summarize sufficiently long content
+        if (
+            not content or len(content) < 400
+        ):  # Only summarize sufficiently long content
             return content
 
         prompt = f"""请用简洁的语言总结以下内容，保留关键信息，长度约为原文的{int(target_ratio * 100)}%：
@@ -65,7 +67,7 @@ class SummaryStrategy(CompressionStrategy):
         try:
             response = await self.provider.chat(
                 messages=[{"role": "user", "content": prompt}],
-                model=None  # Use default model
+                model=None,  # Use default model
             )
             summary = response.content.strip()
             return summary or content
@@ -92,12 +94,12 @@ class TruncationStrategy(CompressionStrategy):
 
         # Try to truncate at sentence boundary
         truncated = content[:target_length]
-        last_period = truncated.rfind('.')
-        last_newline = truncated.rfind('\n')
+        last_period = truncated.rfind(".")
+        last_newline = truncated.rfind("\n")
         break_point = max(last_period, last_newline)
 
         if break_point > target_length * 0.7:  # Only if we found a good break point
-            truncated = truncated[:break_point + 1]
+            truncated = truncated[: break_point + 1]
 
         return truncated + "..." if len(truncated) < len(content) else truncated
 
@@ -129,7 +131,9 @@ class SemanticStrategy(CompressionStrategy):
             return await TruncationStrategy().compress(content, target_ratio)
 
         # Calculate importance for each section
-        importance_scores = [self._calculate_importance(section) for section in sections]
+        importance_scores = [
+            self._calculate_importance(section) for section in sections
+        ]
         total_importance = sum(importance_scores)
 
         if total_importance == 0:
@@ -152,14 +156,14 @@ class SemanticStrategy(CompressionStrategy):
     def _split_sections(self, content: str) -> list[str]:
         """Split content into logical sections."""
         # Split by double newlines or headers
-        sections = content.split('\n\n')
+        sections = content.split("\n\n")
 
         # Further split large sections
         result = []
         for section in sections:
             if len(section) > 2000:
                 # Split by single newlines for large sections
-                subsections = section.split('\n')
+                subsections = section.split("\n")
                 # Group into chunks of ~1000 chars
                 chunk = ""
                 for sub in subsections:
@@ -167,7 +171,7 @@ class SemanticStrategy(CompressionStrategy):
                         result.append(chunk)
                         chunk = sub
                     else:
-                        chunk += '\n' + sub if chunk else sub
+                        chunk += "\n" + sub if chunk else sub
                 if chunk:
                     result.append(chunk)
             else:
@@ -180,15 +184,23 @@ class SemanticStrategy(CompressionStrategy):
         score = 1.0
 
         # Boost code blocks
-        if '```' in section:
+        if "```" in section:
             score += 2.0
 
         # Boost headers
-        if section.strip().startswith(('# ', '## ', '### ')):
+        if section.strip().startswith(("# ", "## ", "### ")):
             score += 1.5
 
         # Boost sections with key terms
-        key_terms = ['error', 'exception', 'result', 'summary', 'conclusion', 'important', 'critical']
+        key_terms = [
+            "error",
+            "exception",
+            "result",
+            "summary",
+            "conclusion",
+            "important",
+            "critical",
+        ]
         lower = section.lower()
         for term in key_terms:
             if term in lower:
@@ -213,7 +225,9 @@ class CompressionConfig:
     max_context_tokens: int = 16000  # Maximum tokens before compression
     target_context_tokens: int = 12000  # Target tokens after compression
     recent_messages_keep: int = 10  # Always keep this many recent messages
-    history_compression_threshold: int = 20  # Start compressing beyond this many messages
+    history_compression_threshold: int = (
+        20  # Start compressing beyond this many messages
+    )
     strategy: str = "semantic"  # "summary", "truncation", "semantic"
     min_content_length: int = 200  # Minimum content length to compress
     preserve_system_prompt_cache: bool = True  # Cache system prompt
@@ -290,9 +304,7 @@ class ContextCompressor:
         }
 
     async def compress_messages(
-        self,
-        messages: list[dict[str, Any]],
-        model: str | None = None
+        self, messages: list[dict[str, Any]], model: str | None = None
     ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
         """
         Compress message list to fit token limit.
@@ -310,12 +322,12 @@ class ContextCompressor:
 
         # Calculate current token count
         total_tokens = self._estimate_tokens(messages)
-        
+
         if total_tokens <= self.config.target_context_tokens:
             return messages, {
                 "compressed": False,
                 "original_tokens": total_tokens,
-                "reason": "under_limit"
+                "reason": "under_limit",
             }
 
         # Apply compression
@@ -327,7 +339,9 @@ class ContextCompressor:
             "original_tokens": total_tokens,
             "final_tokens": final_tokens,
             "reduction": total_tokens - final_tokens,
-            "reduction_percent": ((total_tokens - final_tokens) / total_tokens * 100) if total_tokens > 0 else 0
+            "reduction_percent": ((total_tokens - final_tokens) / total_tokens * 100)
+            if total_tokens > 0
+            else 0,
         }
 
         logger.info(
@@ -337,7 +351,9 @@ class ContextCompressor:
 
         return compressed, stats
 
-    async def compress_system_prompt(self, system_prompt: str, content_sources: dict[str, str]) -> str:
+    async def compress_system_prompt(
+        self, system_prompt: str, content_sources: dict[str, str]
+    ) -> str:
         """
         Compress system prompt using cache.
 
@@ -369,7 +385,9 @@ class ContextCompressor:
         sorted_items = sorted(content_sources.items())
         return hashlib.sha256(str(sorted_items).encode()).hexdigest()[:16]
 
-    async def _apply_compression(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def _apply_compression(
+        self, messages: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Apply compression to messages."""
         if not messages:
             return messages
@@ -387,37 +405,46 @@ class ContextCompressor:
         # Combine system messages with compressed history
         return system_messages + compressed_history
 
-    async def _compress_history(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    async def _compress_history(
+        self, messages: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
         """Compress message history."""
         if len(messages) <= self.config.recent_messages_keep:
             return messages
 
         # Keep recent messages as-is
-        recent = messages[-self.config.recent_messages_keep:]
-        older = messages[:-self.config.recent_messages_keep]
+        recent = messages[-self.config.recent_messages_keep :]
+        older = messages[: -self.config.recent_messages_keep]
 
         if not older:
             return messages
 
         # Compress older messages
-        strategy = self._strategies.get(self.config.strategy, self._strategies["semantic"])
+        strategy = self._strategies.get(
+            self.config.strategy, self._strategies["semantic"]
+        )
 
         # Group older messages for compression
         compressed_older = []
         for msg in older:
             content = msg.get("content", "")
-            if isinstance(content, str) and len(content) > self.config.min_content_length:
+            if (
+                isinstance(content, str)
+                and len(content) > self.config.min_content_length
+            ):
                 # Compress content
                 compressed_content = await strategy.compress(
                     content,
-                    target_ratio=0.3  # More aggressive for older messages
+                    target_ratio=0.3,  # More aggressive for older messages
                 )
-                compressed_older.append({
-                    **msg,
-                    "content": compressed_content,
-                    "_compressed": True,
-                    "_original_length": len(content)
-                })
+                compressed_older.append(
+                    {
+                        **msg,
+                        "content": compressed_content,
+                        "_compressed": True,
+                        "_original_length": len(content),
+                    }
+                )
             else:
                 compressed_older.append(msg)
 

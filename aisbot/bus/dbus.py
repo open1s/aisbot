@@ -1,17 +1,9 @@
 """Async message queue for decoupled channel-agent communication."""
 
 import asyncio
-from typing import Callable, Optional
 
 from loguru import logger
-
-# Disable debug/info logging, only show warnings and errors
-# logger.remove()
-# logger.add(lambda msg: None, level="WARNING")
-
-from aisbot.bus.events import InboundMessage, OutboundMessage
-
-from minidds import PyDataBus, PyTopic
+from minidds import PyDataBus
 
 
 class DBus:
@@ -29,16 +21,14 @@ class DBus:
     async def create_topic(self, topic_name, type_name):
         """Create a non-keyed topic for pub/sub."""
         topic = await self.bus.create_no_key_topic(
-            topic_name=topic_name,
-            type_name=type_name
+            topic_name=topic_name, type_name=type_name
         )
         return topic
 
     async def create_keyed_topic(self, topic_name, type_name):
         """Create a keyed topic for pub/sub with key filtering."""
         topic = await self.bus.create_keyed_topic(
-            topic_name=topic_name,
-            type_name=type_name
+            topic_name=topic_name, type_name=type_name
         )
         return topic
 
@@ -112,7 +102,7 @@ class DBus:
         except asyncio.CancelledError:
             logger.info("Polling task cancelled")
         except Exception as e:
-            logger.error(f"Polling error: {e}")  
+            logger.error(f"Polling error: {e}")
 
     async def loop_forever(self):
         """Keep the event loop running indefinitely."""

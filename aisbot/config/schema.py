@@ -5,8 +5,19 @@ from pydantic import BaseModel, Field
 from pydantic_settings import BaseSettings
 
 
+class BusConfig(BaseModel):
+    """Message bus configuration."""
+
+    provider: str = "dds"  # Message bus provider: "dds" or "zenoh"
+    domain_id: int = 0  # DDS domain ID (for DDS provider)
+    zenoh_config: dict | None = (
+        None  # Zenoh configuration dictionary (for Zenoh provider)
+    )
+
+
 class WhatsAppConfig(BaseModel):
     """WhatsApp channel configuration."""
+
     enabled: bool = False
     bridge_url: str = "ws://localhost:3001"
     allow_from: list[str] = Field(default_factory=list)  # Allowed phone numbers
@@ -14,14 +25,18 @@ class WhatsAppConfig(BaseModel):
 
 class TelegramConfig(BaseModel):
     """Telegram channel configuration."""
+
     enabled: bool = False
     token: str = ""  # Bot token from @BotFather
     allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs or usernames
-    proxy: str | None = None  # HTTP/SOCKS5 proxy URL, e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080"
+    proxy: str | None = (
+        None  # HTTP/SOCKS5 proxy URL, e.g. "http://127.0.0.1:7890" or "socks5://127.0.0.1:1080"
+    )
 
 
 class FeishuConfig(BaseModel):
     """Feishu/Lark channel configuration using WebSocket long connection."""
+
     enabled: bool = False
     app_id: str = ""  # App ID from Feishu Open Platform
     app_secret: str = ""  # App Secret from Feishu Open Platform
@@ -29,15 +44,21 @@ class FeishuConfig(BaseModel):
     verification_token: str = ""  # Verification Token for event subscription (optional)
     allow_from: list[str] = Field(default_factory=list)  # Allowed user open_ids
 
+
 class QQConfig(BaseModel):
     """QQ channel configuration using botpy SDK."""
+
     enabled: bool = False
     app_id: str = ""  # 机器人 ID (AppID) from q.qq.com
     secret: str = ""  # 机器人密钥 (AppSecret) from q.qq.com
-    allow_from: list[str] = Field(default_factory=list)  # Allowed user openids (empty = public access)
+    allow_from: list[str] = Field(
+        default_factory=list
+    )  # Allowed user openids (empty = public access)
+
 
 class DingTalkConfig(BaseModel):
     """DingTalk channel configuration using Stream mode."""
+
     enabled: bool = False
     client_id: str = ""  # AppKey
     client_secret: str = ""  # AppSecret
@@ -46,6 +67,7 @@ class DingTalkConfig(BaseModel):
 
 class DiscordConfig(BaseModel):
     """Discord channel configuration."""
+
     enabled: bool = False
     token: str = ""  # Bot token from Discord Developer Portal
     allow_from: list[str] = Field(default_factory=list)  # Allowed user IDs
@@ -55,6 +77,7 @@ class DiscordConfig(BaseModel):
 
 class ChannelsConfig(BaseModel):
     """Configuration for chat channels."""
+
     whatsapp: WhatsAppConfig = Field(default_factory=WhatsAppConfig)
     telegram: TelegramConfig = Field(default_factory=TelegramConfig)
     discord: DiscordConfig = Field(default_factory=DiscordConfig)
@@ -62,8 +85,10 @@ class ChannelsConfig(BaseModel):
     dingtalk: DingTalkConfig = Field(default_factory=DingTalkConfig)
     qq: QQConfig = Field(default_factory=QQConfig)
 
+
 class AgentDefaults(BaseModel):
     """Default agent configuration."""
+
     workspace: str = "~/.aisbot/workspace"
     model: str = "anthropic/claude-opus-4-5"
     max_tokens: int = 8192
@@ -73,18 +98,23 @@ class AgentDefaults(BaseModel):
 
 class AgentsConfig(BaseModel):
     """Agent configuration."""
+
     defaults: AgentDefaults = Field(default_factory=AgentDefaults)
 
 
 class ProviderConfig(BaseModel):
     """LLM provider configuration."""
+
     api_key: str = ""
     api_base: str | None = None
-    extra_headers: dict[str, str] | None = None  # Custom headers (e.g. APP-Code for AiHubMix)
+    extra_headers: dict[str, str] | None = (
+        None  # Custom headers (e.g. APP-Code for AiHubMix)
+    )
 
 
 class ProvidersConfig(BaseModel):
     """Configuration for LLM providers."""
+
     anthropic: ProviderConfig = Field(default_factory=ProviderConfig)
     openai: ProviderConfig = Field(default_factory=ProviderConfig)
     openrouter: ProviderConfig = Field(default_factory=ProviderConfig)
@@ -95,38 +125,49 @@ class ProvidersConfig(BaseModel):
     vllm: ProviderConfig = Field(default_factory=ProviderConfig)
     gemini: ProviderConfig = Field(default_factory=ProviderConfig)
     moonshot: ProviderConfig = Field(default_factory=ProviderConfig)
-    aihubmix: ProviderConfig = Field(default_factory=ProviderConfig)  # AiHubMix API gateway
+    aihubmix: ProviderConfig = Field(
+        default_factory=ProviderConfig
+    )  # AiHubMix API gateway
 
 
 class GatewayConfig(BaseModel):
     """Gateway/server configuration."""
+
     host: str = "0.0.0.0"
     port: int = 18790
 
 
 class WebSearchConfig(BaseModel):
     """Web search tool configuration."""
-    api_key: str = ""  # API key (optional, currently using DuckDuckGo which doesn't require one)
+
+    api_key: str = (
+        ""  # API key (optional, currently using DuckDuckGo which doesn't require one)
+    )
     max_results: int = 5
 
 
 class WebToolsConfig(BaseModel):
     """Web tools configuration."""
+
     search: WebSearchConfig = Field(default_factory=WebSearchConfig)
 
 
 class ExecToolConfig(BaseModel):
     """Shell exec tool configuration."""
+
     timeout: int = 60
 
 
 class CompressionConfig(BaseModel):
     """Context compression configuration."""
+
     enabled: bool = True
     max_context_tokens: int = 16000  # Maximum tokens before compression
     target_context_tokens: int = 12000  # Target tokens after compression
     recent_messages_keep: int = 10  # Always keep this many recent messages
-    history_compression_threshold: int = 20  # Start compressing beyond this many messages
+    history_compression_threshold: int = (
+        20  # Start compressing beyond this many messages
+    )
     strategy: str = "semantic"  # "summary", "truncation", "semantic"
     min_content_length: int = 200  # Minimum content length to compress
     preserve_system_prompt_cache: bool = True  # Cache system prompt
@@ -134,27 +175,35 @@ class CompressionConfig(BaseModel):
 
 class ToolsConfig(BaseModel):
     """Tools configuration."""
+
     web: WebToolsConfig = Field(default_factory=WebToolsConfig)
     exec: ExecToolConfig = Field(default_factory=ExecToolConfig)
-    restrict_to_workspace: bool = False  # If true, restrict all tool access to workspace directory
+    restrict_to_workspace: bool = (
+        False  # If true, restrict all tool access to workspace directory
+    )
 
 
 class Config(BaseSettings):
     """Root configuration for aisbot."""
+
     agents: AgentsConfig = Field(default_factory=AgentsConfig)
     channels: ChannelsConfig = Field(default_factory=ChannelsConfig)
     providers: ProvidersConfig = Field(default_factory=ProvidersConfig)
     gateway: GatewayConfig = Field(default_factory=GatewayConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     compression: CompressionConfig = Field(default_factory=CompressionConfig)
-    
+    bus: BusConfig = Field(default_factory=BusConfig)
+
     @property
     def workspace_path(self) -> Path:
         """Get expanded workspace path."""
         return Path(self.agents.defaults.workspace).expanduser()
-    
+
     # Default base URLs for API gateways
-    _GATEWAY_DEFAULTS = {"openrouter": "https://openrouter.ai/api/v1", "aihubmix": "https://aihubmix.com/v1"}
+    _GATEWAY_DEFAULTS = {
+        "openrouter": "https://openrouter.ai/api/v1",
+        "aihubmix": "https://aihubmix.com/v1",
+    }
 
     def get_provider(self, model: str | None = None) -> ProviderConfig | None:
         """Get matched provider config (api_key, api_base, extra_headers). Falls back to first available."""
@@ -162,26 +211,48 @@ class Config(BaseSettings):
         p = self.providers
         # Keyword → provider mapping (order matters: gateways first)
         keyword_map = {
-            "aihubmix": p.aihubmix, "openrouter": p.openrouter,
-            "deepseek": p.deepseek, "anthropic": p.anthropic, "claude": p.anthropic,
-            "openai": p.openai, "gpt": p.openai, "gemini": p.gemini,
-            "zhipu": p.zhipu, "glm": p.zhipu, "zai": p.zhipu,
-            "dashscope": p.dashscope, "qwen": p.dashscope,
-            "groq": p.groq, "moonshot": p.moonshot, "kimi": p.moonshot, "vllm": p.vllm,
+            "aihubmix": p.aihubmix,
+            "openrouter": p.openrouter,
+            "deepseek": p.deepseek,
+            "anthropic": p.anthropic,
+            "claude": p.anthropic,
+            "openai": p.openai,
+            "gpt": p.openai,
+            "gemini": p.gemini,
+            "zhipu": p.zhipu,
+            "glm": p.zhipu,
+            "zai": p.zhipu,
+            "dashscope": p.dashscope,
+            "qwen": p.dashscope,
+            "groq": p.groq,
+            "moonshot": p.moonshot,
+            "kimi": p.moonshot,
+            "vllm": p.vllm,
         }
         for kw, provider in keyword_map.items():
             if kw in model and provider.api_key:
                 return provider
         # Fallback: gateways first (can serve any model), then specific providers
-        all_providers = [p.openrouter, p.aihubmix, p.anthropic, p.openai, p.deepseek,
-                         p.gemini, p.zhipu, p.dashscope, p.moonshot, p.vllm, p.groq]
+        all_providers = [
+            p.openrouter,
+            p.aihubmix,
+            p.anthropic,
+            p.openai,
+            p.deepseek,
+            p.gemini,
+            p.zhipu,
+            p.dashscope,
+            p.moonshot,
+            p.vllm,
+            p.groq,
+        ]
         return next((pr for pr in all_providers if pr.api_key), None)
 
     def get_api_key(self, model: str | None = None) -> str | None:
         """Get API key for the given model. Falls back to first available key."""
         p = self.get_provider(model)
         return p.api_key if p else None
-    
+
     def get_api_base(self, model: str | None = None) -> str | None:
         """Get API base URL for the given model. Applies default URLs for known gateways."""
         p = self.get_provider(model)
@@ -192,7 +263,7 @@ class Config(BaseSettings):
             if p == getattr(self.providers, name):
                 return url
         return None
-    
+
     class Config:
         env_prefix = "AISBOT_"
         env_nested_delimiter = "__"

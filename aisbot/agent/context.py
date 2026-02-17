@@ -28,12 +28,12 @@ class ContextBuilder:
         self.memory = MemoryStore(workspace)
         self.skills = SkillsLoader(workspace)
         self.compressor = compressor
-    
+
     async def build_system_prompt(
         self,
         skill_names: list[str] | None = None,
         tools_summary: str | None = None,
-        provider: Any | None = None
+        provider: Any | None = None,
     ) -> str:
         """
         Build the system prompt from bootstrap files, memory, and skills.
@@ -99,20 +99,20 @@ Skills with available="false" need dependencies installed first - you can try in
         # Apply compression if configured
         if self.compressor and provider:
             system_prompt = await self.compressor.compress_system_prompt(
-                system_prompt,
-                content_sources
+                system_prompt, content_sources
             )
 
         return system_prompt
-    
+
     def _get_identity(self) -> str:
         """Get the core identity section."""
         from datetime import datetime
+
         now = datetime.now().strftime("%Y-%m-%d %H:%M (%A)")
         workspace_path = str(self.workspace.expanduser().resolve())
         system = platform.system()
         runtime = f"{'macOS' if system == 'Darwin' else system} {platform.machine()}, Python {platform.python_version()}"
-        
+
         return f"""# aisbot 🐈
 
 You are aisbot, a helpful AI assistant. You have access to tools that allow you to:
@@ -140,17 +140,17 @@ For normal conversation, just respond with text - do not call the message tool.
 
 Always be helpful, accurate, and concise. When using tools, explain what you're doing.
 When remembering something, write to {workspace_path}/memory/MEMORY.md"""
-    
+
     def _load_bootstrap_files(self) -> str:
         """Load all bootstrap files from workspace."""
         parts = []
-        
+
         for filename in self.BOOTSTRAP_FILES:
             file_path = self.workspace / filename
             if file_path.exists():
                 content = file_path.read_text(encoding="utf-8")
                 parts.append(f"## {filename}\n\n{content}")
-        
+
         return "\n\n".join(parts) if parts else ""
 
     def build_tools_summary(self, tools_registry: Any) -> str:
@@ -204,7 +204,9 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
                     parts.append("MCP servers configured (tools not yet loaded):\n")
                     for s in servers:
                         parts.append(f"- {s}")
-                    parts.append("\nUse `mcp_proxy` with action='summary' to list available MCP tools.\n")
+                    parts.append(
+                        "\nUse `mcp_proxy` with action='summary' to list available MCP tools.\n"
+                    )
 
         # MCP tools from registry (old style, if any)
         if "mcp" in tools_by_source:
@@ -241,7 +243,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         chat_id: str | None = None,
         tools_summary: str | None = None,
         provider: Any | None = None,
-        model: str | None = None
+        model: str | None = None,
     ) -> tuple[list[dict[str, Any]], dict[str, Any] | None]:
         """
         Build the complete message list for an LLM call.
@@ -263,9 +265,13 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         messages = []
 
         # System prompt
-        system_prompt = await self.build_system_prompt(skill_names, tools_summary, provider)
+        system_prompt = await self.build_system_prompt(
+            skill_names, tools_summary, provider
+        )
         if channel and chat_id:
-            system_prompt += f"\n\n## Current Session\nChannel: {channel}\nChat ID: {chat_id}"
+            system_prompt += (
+                f"\n\n## Current Session\nChannel: {channel}\nChat ID: {chat_id}"
+            )
         messages.append({"role": "system", "content": system_prompt})
 
         # History
@@ -278,15 +284,19 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         # Apply compression if configured
         compression_stats = None
         if self.compressor:
-            messages, compression_stats = await self.compressor.compress_messages(messages, model)
+            messages, compression_stats = await self.compressor.compress_messages(
+                messages, model
+            )
 
         return messages, compression_stats
 
-    def _build_user_content(self, text: str, media: list[str] | None) -> str | list[dict[str, Any]]:
+    def _build_user_content(
+        self, text: str, media: list[str] | None
+    ) -> str | list[dict[str, Any]]:
         """Build user message content with optional base64-encoded images."""
         if not media:
             return text
-        
+
         images = []
         for path in media:
             p = Path(path)
@@ -294,13 +304,17 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
             if not p.is_file() or not mime or not mime.startswith("image/"):
                 continue
             b64 = base64.b64encode(p.read_bytes()).decode()
-            images.append({"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}})
-        
+            images.append(
+                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}}
+            )
+
         if not images:
             return text
         return images + [{"type": "text", "text": text}]
-    
-    async def compress_tool_result(self, result: str, provider: Any | None = None) -> str:
+
+    async def compress_tool_result(
+        self, result: str, provider: Any | None = None
+    ) -> str:
         """
         Compress tool result if it's too long.
 
@@ -321,7 +335,9 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         strategy = self.compressor.get_strategy(self.compressor.config.strategy)
         if strategy:
             compressed = await strategy.compress(result, target_ratio=0.4)
-            logger.debug(f"Tool result compressed: {len(result)} -> {len(compressed)} chars")
+            logger.debug(
+                f"Tool result compressed: {len(result)} -> {len(compressed)} chars"
+            )
             return compressed
 
         return result
@@ -331,7 +347,7 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         messages: list[dict[str, Any]],
         tool_call_id: str,
         tool_name: str,
-        result: str
+        result: str,
     ) -> list[dict[str, Any]]:
         """
         Add a tool result to the message list.
@@ -345,35 +361,37 @@ When remembering something, write to {workspace_path}/memory/MEMORY.md"""
         Returns:
             Updated message list.
         """
-        messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "name": tool_name,
-            "content": result
-        })
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "name": tool_name,
+                "content": result,
+            }
+        )
         return messages
-    
+
     def add_assistant_message(
         self,
         messages: list[dict[str, Any]],
         content: str | None,
-        tool_calls: list[dict[str, Any]] | None = None
+        tool_calls: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """
         Add an assistant message to the message list.
-        
+
         Args:
             messages: Current message list.
             content: Message content.
             tool_calls: Optional tool calls.
-        
+
         Returns:
             Updated message list.
         """
         msg: dict[str, Any] = {"role": "assistant", "content": content or ""}
-        
+
         if tool_calls:
             msg["tool_calls"] = tool_calls
-        
+
         messages.append(msg)
         return messages
