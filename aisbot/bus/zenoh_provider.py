@@ -105,7 +105,17 @@ class ZenohProvider(BusProvider):
         """Consume the next inbound message."""
         start = time.perf_counter()
         try:
-            sample = self._inbound_sub.try_recv()
+            # sample = await asyncio.wait_for(
+            #     asyncio.to_thread(self._inbound_sub.recv),
+            #     timeout=0.1
+            # )
+            while True:
+                sample = self._inbound_sub.try_recv()
+                if sample:
+                    break
+                else:
+                    await asyncio.sleep(0.01)
+
             elapsed = (time.perf_counter() - start) * 1000
             if sample:
                 try:
@@ -149,7 +159,17 @@ class ZenohProvider(BusProvider):
         """Consume the next outbound message."""
         start = time.perf_counter()
         try:
-            sample = self._outbound_sub.try_recv()
+            # sample = await asyncio.wait_for(
+            #             asyncio.to_thread(self._outbound_sub.recv),
+            #             timeout=0.1
+            # )
+
+            while True:
+                sample = self._outbound_sub.try_recv()
+                if sample:
+                    break
+                else:
+                    await asyncio.sleep(0.01)
             elapsed = (time.perf_counter() - start) * 1000
             if sample:
                 try:
@@ -197,7 +217,16 @@ class ZenohProvider(BusProvider):
             try:
                 start = time.perf_counter()
                 try:
-                    sample = self._outbound_sub.recv()
+                    # sample = await asyncio.wait_for(
+                    #     asyncio.to_thread(self._outbound_sub.recv),
+                    #     timeout=0.1
+                    # )
+                    while True:
+                        sample = self._outbound_sub.try_recv()
+                        if sample:
+                            break
+                        else:
+                            await asyncio.sleep(0.01)
                     elapsed = (time.perf_counter() - start) * 1000
                     if sample:
                         try:

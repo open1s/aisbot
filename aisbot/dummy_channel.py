@@ -14,9 +14,9 @@ async def recv(bus: MessageBus) -> None:
         if msg:
             print(f"[recv] Received: {msg}")
 
-        msg = await bus.consume_outbound()
-        if msg:
-            print(f"[recv] Received: {msg}")    
+        # msg = await bus.consume_outbound()
+        # if msg:
+        #     print(f"[recv] Received: {msg}")    
 
 
 async def main():
@@ -48,7 +48,7 @@ async def main():
     # Publish messages
     while True:
         await bus.publish_inbound(message)
-        await bus.publish_outbound(outmessage)
+        # await bus.publish_outbound(outmessage)
         await asyncio.sleep(1)
 
 
